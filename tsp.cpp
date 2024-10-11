@@ -67,7 +67,7 @@ public:
     void refresh_allowed_cores()
     {
         auto sibling_pids = get_siblings();
-        std::vector<u_int32_t> siblings_affinity;
+        std::vector<uint32_t> siblings_affinity;
         for (auto i : sibling_pids)
         {
             auto tmp = get_sibling_affinity(i);
@@ -109,7 +109,7 @@ private:
 
     std::vector<uint32_t> get_sibling_affinity(pid_t pid)
     {
-        std::vector<u_int32_t> out;
+        std::vector<uint32_t> out;
         cpu_set_t mask;
         if (sched_getaffinity(pid, sizeof(mask), &mask) == -1)
         {
@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
         std::this_thread::sleep_for(std::chrono::seconds(1));
         me.refresh_allowed_cores();
     }
-    for (u_int32_t i = 0; i < nslots; i++)
+    for (uint32_t i = 0; i < nslots; i++)
     {
         CPU_SET(me.allowed_cores[i], &mask);
     }
