@@ -28,7 +28,7 @@ std::vector<std::uint32_t> parse_cpuset_range(std::string in)
     std::stringstream ss1(in);
     std::string token;
     std::vector<std::uint32_t> out;
-    while (std::getline(ss1, token, ':'))
+    while (std::getline(ss1, token, ','))
     {
         if (token.find('-') == std::string::npos)
         {
