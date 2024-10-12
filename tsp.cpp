@@ -200,7 +200,7 @@ bool check_mpi(std::vector<char *> in)
             close(pipefd[0]);
             dup2(pipefd[1], 1);
             close(pipefd[1]);
-            execlp(prog_name.c_str(), prog_name.c_str(), "--version");
+            execlp(prog_name.c_str(), prog_name.c_str(), "--version", nullptr);
         }
         else
         {
@@ -211,6 +211,10 @@ bool check_mpi(std::vector<char *> in)
                 mpi_version_output.append(buffer);
             }
             close(pipefd[0]);
+            if (waitpid(fork_pid, nullptr, 0) == -1)
+            {
+                throw std::runtime_error("Error watiting for mpirun test process");
+            }
         }
         if (mpi_version_output.find("Open MPI") != std::string::npos ||
             mpi_version_output.find("OpenRTE") != std::string::npos)
@@ -222,13 +226,13 @@ bool check_mpi(std::vector<char *> in)
     return false;
 }
 
-std::filesystem::path make_rankfile(std::vector<uint32_t> procs, int nslots)
+std::filesystem::path make_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
 {
     std::filesystem::path rank_file = "/tmp/" + std::to_string(getpid()) + "_rankfile.txt";
     std::ofstream rf_stream(rank_file);
     if (rf_stream.is_open())
     {
-        for (uint32_t i; i < std::ranges::take_view(procs, nslots).size(); i++)
+        for (uint32_t i; i < nslots; i++)
         {
             rf_stream << "rank " + std::to_string(i) + "=localhost slot=" + std::to_string(procs[i]) << std::endl;
         }
@@ -253,8 +257,9 @@ int main(int argc, char *argv[])
 {
     // Parse args: only take the ones we use for now
     int c;
-    std::uint32_t nslots(1);
+    uint32_t nslots(1);
     bool disappear_output = false;
+    bool do_fork = true;
 
     while ((c = getopt(argc, argv, "+nfN:")) != -1)
     {
@@ -265,11 +270,26 @@ int main(int argc, char *argv[])
             disappear_output = true;
             break;
         case 'f':
-            // This does nothing
+            do_fork = false;
             break;
         case 'N':
             nslots = std::stoul(optarg);
             break;
+        }
+    }
+
+    if (do_fork)
+    {
+        pid_t main_fork_pid;
+        main_fork_pid = fork();
+        if (main_fork_pid == -1)
+        {
+            throw std::runtime_error("Unable to fork when forking requested");
+        }
+        if (main_fork_pid != 0)
+        {
+            // We're done here
+            exit(0);
         }
     }
 
