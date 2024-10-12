@@ -54,15 +54,23 @@ public:
     pid_t pid;
     std::vector<uint32_t> allowed_cores;
 
-    Tsp_Proc()
+    Tsp_Proc(uint32_t nslots)
     {
-
+        this->nslots = nslots;
         pid = getpid();
         my_path = std::filesystem::read_symlink("/proc/self/exe");
         // Open cgroups file
         cpuset_from_cgroup = get_cgroup();
+        if (nslots > cpuset_from_cgroup.size())
+        {
+            throw std::runtime_error("More slots requested than available on the system, this process can never run.");
+        }
         refresh_allowed_cores();
     };
+
+    bool allowed_to_run() {
+        return allowed_cores.size() > nslots;
+    }
 
     void refresh_allowed_cores()
     {
@@ -74,9 +82,16 @@ public:
             siblings_affinity.insert(siblings_affinity.end(), tmp.begin(), tmp.end());
         }
         std::sort(siblings_affinity.begin(), siblings_affinity.end());
+        allowed_cores.clear();
         std::set_difference(cpuset_from_cgroup.begin(), cpuset_from_cgroup.end(),
                             siblings_affinity.begin(), siblings_affinity.end(),
                             std::inserter(allowed_cores, allowed_cores.begin()));
+        
+        for ( const uint32_t & i : allowed_cores ) {
+            std::cout << i << ",";
+        }
+        std::cout << std::endl;
+
     }
 
     ~Tsp_Proc() {};
@@ -84,6 +99,7 @@ public:
 private:
     std::vector<uint32_t> cpuset_from_cgroup;
     std::filesystem::path my_path;
+    uint32_t nslots;
 
     std::vector<pid_t> get_siblings()
     {
@@ -301,12 +317,12 @@ int main(int argc, char *argv[])
 
     bool is_openmpi = check_mpi(proc_to_run);
 
-    Tsp_Proc me;
+    Tsp_Proc me(nslots);
 
     cpu_set_t mask;
     CPU_ZERO(&mask);
 
-    while (me.allowed_cores.size() < nslots)
+    while (!me.allowed_to_run())
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         me.refresh_allowed_cores();
