@@ -22,6 +22,7 @@
 
 #define CGROUP_CPUSET_PATH_PREFIX "/sys/fs/cgroup/cpuset"
 #define CPUSET_FILE "/cpuset.cpus"
+#define SEMAPHORE_FILE_TEMPLATE "/tmp/tsp_hpc_is_waiting"
 
 std::vector<std::uint32_t> parse_cpuset_range(std::string in)
 {
@@ -48,6 +49,29 @@ std::vector<std::uint32_t> parse_cpuset_range(std::string in)
     return out;
 };
 
+class Semaphore_File
+{
+public:
+    Semaphore_File()
+    {
+        fn = strdup(SEMAPHORE_FILE_TEMPLATE ".XXXXXX");
+        if ((fd = mkstemp(fn)) == -1)
+        {
+            throw std::runtime_error("Unable to create semaphore file ret=" + std::to_string(fd) + " errno=" + std::to_string(errno));
+        }
+        unlink(fn);
+    }
+    ~Semaphore_File()
+    {
+        close(fd);
+        free(fn);
+    }
+
+private:
+    char *fn;
+    int fd;
+};
+
 class Tsp_Proc
 {
 public:
@@ -68,7 +92,8 @@ public:
         refresh_allowed_cores();
     };
 
-    bool allowed_to_run() {
+    bool allowed_to_run()
+    {
         return allowed_cores.size() > nslots;
     }
 
@@ -86,12 +111,6 @@ public:
         std::set_difference(cpuset_from_cgroup.begin(), cpuset_from_cgroup.end(),
                             siblings_affinity.begin(), siblings_affinity.end(),
                             std::inserter(allowed_cores, allowed_cores.begin()));
-        
-        for ( const uint32_t & i : allowed_cores ) {
-            std::cout << i << ",";
-        }
-        std::cout << std::endl;
-
     }
 
     ~Tsp_Proc() {};
@@ -127,6 +146,25 @@ private:
     {
         std::vector<uint32_t> out;
         cpu_set_t mask;
+        // Just return an empty vector if the semaphore file is present
+        for (const auto &entry : std::filesystem::directory_iterator("/proc/" + std::to_string(pid) + "/fd"))
+        {
+            try
+            {
+                if (std::filesystem::read_symlink(entry).string().find(SEMAPHORE_FILE_TEMPLATE) != std::string::npos)
+                {
+                    // Semaphore present, ignore
+                    return out;
+                }
+            }
+            catch (std::filesystem::filesystem_error &e)
+            {
+                // Symlink was deleted before we read it, so
+                // we actually do care about this process's
+                // affinity
+            }
+        }
+
         if (sched_getaffinity(pid, sizeof(mask), &mask) == -1)
         {
             // Process may have been killed - so it isn't taking
@@ -196,81 +234,109 @@ private:
     }
 };
 
-bool check_mpi(std::vector<char *> in)
+class Run_cmd
 {
-    std::string prog_name(in[0]);
-    if (prog_name == "mpirun" || prog_name == "mpiexec")
+public:
+    std::vector<char *> proc_to_run;
+    bool is_openmpi;
+    Run_cmd(char *cmdline[], int start, int end)
     {
-        // OpenMPI does not respect parent process binding,
-        // so we need to check if we're attempting to run
-        // OpenMPI, and if we are, we need to construct a
-        // rankfile and add it to the arguments. Note that
-        // this will explode if you're attempting anything
-        // other than by-core binding and mapping
-        int pipefd[2];
-        pipe(pipefd);
-        int fork_pid;
-        std::string mpi_version_output;
-        if (0 == (fork_pid = fork()))
+        for (int i = start; i < end; i++)
         {
-            close(pipefd[0]);
-            dup2(pipefd[1], 1);
-            close(pipefd[1]);
-            execlp(prog_name.c_str(), prog_name.c_str(), "--version", nullptr);
+            proc_to_run.push_back(cmdline[i]);
         }
-        else
+        is_openmpi = check_mpi();
+    }
+    ~Run_cmd()
+    {
+        if (rf_copy != nullptr)
         {
-            char buffer[1024];
-            close(pipefd[1]);
-            while (read(pipefd[0], buffer, sizeof(buffer)) != 0)
-            {
-                mpi_version_output.append(buffer);
-            }
-            close(pipefd[0]);
-            if (waitpid(fork_pid, nullptr, 0) == -1)
-            {
-                throw std::runtime_error("Error watiting for mpirun test process");
-            }
+            free(rf_copy);
         }
-        if (mpi_version_output.find("Open MPI") != std::string::npos ||
-            mpi_version_output.find("OpenRTE") != std::string::npos)
+        if (dash_rf != nullptr)
         {
-            // OpenMPI detected...
-            return true;
+            free(dash_rf);
         }
     }
-    return false;
-}
 
-std::filesystem::path make_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
-{
-    std::filesystem::path rank_file = "/tmp/" + std::to_string(getpid()) + "_rankfile.txt";
-    std::ofstream rf_stream(rank_file);
-    if (rf_stream.is_open())
+    void add_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
     {
-        for (uint32_t i; i < nslots; i++)
-        {
-            rf_stream << "rank " + std::to_string(i) + "=localhost slot=" + std::to_string(procs[i]) << std::endl;
-        }
+        auto rf = make_rankfile(procs, nslots);
+        const char *rf_str = rf.c_str();
+        rf_copy = strdup(rf_str);
+        dash_rf = strdup("-rf");
+        proc_to_run.insert(proc_to_run.begin() + 1, rf_copy);
+        proc_to_run.insert(proc_to_run.begin() + 1, dash_rf);
+        proc_to_run.push_back(nullptr);
     }
-    rf_stream.close();
-    return rank_file;
-}
 
-void add_rankfile(std::vector<char *> *cmdline, std::filesystem::path rf)
-{
-    const char *rf_str = rf.c_str();
-    // I know, I know. Its like 20 bytes and it runs once
-    // I figure we can spare it.
-    char *rf_copy = strdup(rf_str);
-    char *dash_rf = strdup("-rf");
-    cmdline->insert(cmdline->begin() + 1, rf_copy);
-    cmdline->insert(cmdline->begin() + 1, dash_rf);
-    cmdline->push_back(nullptr);
-}
+private:
+    char *rf_copy = nullptr;
+    char *dash_rf = nullptr;
+    std::filesystem::path make_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
+    {
+        std::filesystem::path rank_file = "/tmp/" + std::to_string(getpid()) + "_rankfile.txt";
+        std::ofstream rf_stream(rank_file);
+        if (rf_stream.is_open())
+        {
+            for (uint32_t i; i < nslots; i++)
+            {
+                rf_stream << "rank " + std::to_string(i) + "=localhost slot=" + std::to_string(procs[i]) << std::endl;
+            }
+        }
+        rf_stream.close();
+        return rank_file;
+    }
+    bool check_mpi()
+    {
+        std::string prog_name(proc_to_run[0]);
+        if (prog_name == "mpirun" || prog_name == "mpiexec")
+        {
+            // OpenMPI does not respect parent process binding,
+            // so we need to check if we're attempting to run
+            // OpenMPI, and if we are, we need to construct a
+            // rankfile and add it to the arguments. Note that
+            // this will explode if you're attempting anything
+            // other than by-core binding and mapping
+            int pipefd[2];
+            pipe(pipefd);
+            int fork_pid;
+            std::string mpi_version_output;
+            if (0 == (fork_pid = fork()))
+            {
+                close(pipefd[0]);
+                dup2(pipefd[1], 1);
+                close(pipefd[1]);
+                execlp(prog_name.c_str(), prog_name.c_str(), "--version", nullptr);
+            }
+            else
+            {
+                char buffer[1024];
+                close(pipefd[1]);
+                while (read(pipefd[0], buffer, sizeof(buffer)) != 0)
+                {
+                    mpi_version_output.append(buffer);
+                }
+                close(pipefd[0]);
+                if (waitpid(fork_pid, nullptr, 0) == -1)
+                {
+                    throw std::runtime_error("Error watiting for mpirun test process");
+                }
+            }
+            if (mpi_version_output.find("Open MPI") != std::string::npos ||
+                mpi_version_output.find("OpenRTE") != std::string::npos)
+            {
+                // OpenMPI detected...
+                return true;
+            }
+        }
+        return false;
+    }
+};
 
 int main(int argc, char *argv[])
 {
+    Semaphore_File *sf = new Semaphore_File();
     // Parse args: only take the ones we use for now
     int c;
     uint32_t nslots(1);
@@ -309,14 +375,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    std::vector<char *> proc_to_run;
-    for (int i = optind; i < argc; i++)
-    {
-        proc_to_run.push_back(argv[i]);
-    }
-
-    bool is_openmpi = check_mpi(proc_to_run);
-
+    Run_cmd cmd(argv, optind, argc);
     Tsp_Proc me(nslots);
 
     cpu_set_t mask;
@@ -327,6 +386,7 @@ int main(int argc, char *argv[])
         std::this_thread::sleep_for(std::chrono::seconds(1));
         me.refresh_allowed_cores();
     }
+    delete sf;
     for (uint32_t i = 0; i < nslots; i++)
     {
         CPU_SET(me.allowed_cores[i], &mask);
@@ -336,10 +396,9 @@ int main(int argc, char *argv[])
         throw std::runtime_error("Unable to set CPU affinity");
     }
     std::filesystem::path rf_path;
-    if (is_openmpi)
+    if (cmd.is_openmpi)
     {
-        rf_path = make_rankfile(me.allowed_cores, nslots);
-        add_rankfile(&proc_to_run, rf_path);
+        cmd.add_rankfile(me.allowed_cores,nslots);
     }
 
     pid_t fork_pid;
@@ -361,11 +420,11 @@ int main(int argc, char *argv[])
                 dup2(fd, 1);
                 dup2(fd, 2);
             }
-            if (is_openmpi)
+            if (cmd.is_openmpi)
             {
                 setenv("OMPI_MCA_rmaps_base_mapping_policy", "", 1);
             }
-            ret = execvp(proc_to_run[0], &proc_to_run[0]);
+            ret = execvp(cmd.proc_to_run[0], &cmd.proc_to_run[0]);
             if (disappear_output)
             {
                 close(fd);
@@ -373,7 +432,7 @@ int main(int argc, char *argv[])
 
             if (ret != 0)
             {
-                throw std::runtime_error("Error: could not exec " + std::string(proc_to_run[0]) + ". ret=" + std::to_string(fork_pid) + "errno=" + std::to_string(errno));
+                throw std::runtime_error("Error: could not exec " + std::string(cmd.proc_to_run[0]) + ". ret=" + std::to_string(fork_pid) + "errno=" + std::to_string(errno));
             }
         }
         if (waited_on_pid == -1)
@@ -405,7 +464,7 @@ int main(int argc, char *argv[])
     }
 
     // Exit with status of forked process.
-    if (is_openmpi)
+    if (cmd.is_openmpi)
     {
         std::filesystem::remove(rf_path);
     }
