@@ -24,31 +24,6 @@
 #define CPUSET_FILE "/cpuset.cpus"
 #define SEMAPHORE_FILE_TEMPLATE "/tmp/tsp_hpc_is_waiting"
 
-std::vector<std::uint32_t> parse_cpuset_range(std::string in)
-{
-    std::stringstream ss1(in);
-    std::string token;
-    std::vector<std::uint32_t> out;
-    while (std::getline(ss1, token, ','))
-    {
-        if (token.find('-') == std::string::npos)
-        {
-            out.push_back(std::stoul(token));
-        }
-        else
-        {
-            std::stringstream ss2(token);
-            std::string starts, ends;
-            std::getline(ss2, starts, '-');
-            std::getline(ss2, ends, '-');
-            std::vector<std::uint32_t> tmp(std::stoul(ends) - std::stoul(starts) + 1);
-            std::iota(tmp.begin(), tmp.end(), std::stoul(starts));
-            out.insert(out.end(), tmp.begin(), tmp.end());
-        }
-    }
-    return out;
-};
-
 class Semaphore_File
 {
 public:
@@ -137,6 +112,31 @@ private:
                 {
                     out.push_back(std::stoul(entry.path().filename()));
                 }
+            }
+        }
+        return out;
+    };
+
+    std::vector<std::uint32_t> parse_cpuset_range(std::string in)
+    {
+        std::stringstream ss1(in);
+        std::string token;
+        std::vector<std::uint32_t> out;
+        while (std::getline(ss1, token, ','))
+        {
+            if (token.find('-') == std::string::npos)
+            {
+                out.push_back(std::stoul(token));
+            }
+            else
+            {
+                std::stringstream ss2(token);
+                std::string starts, ends;
+                std::getline(ss2, starts, '-');
+                std::getline(ss2, ends, '-');
+                std::vector<std::uint32_t> tmp(std::stoul(ends) - std::stoul(starts) + 1);
+                std::iota(tmp.begin(), tmp.end(), std::stoul(starts));
+                out.insert(out.end(), tmp.begin(), tmp.end());
             }
         }
         return out;
@@ -398,7 +398,7 @@ int main(int argc, char *argv[])
     std::filesystem::path rf_path;
     if (cmd.is_openmpi)
     {
-        cmd.add_rankfile(me.allowed_cores,nslots);
+        cmd.add_rankfile(me.allowed_cores, nslots);
     }
 
     pid_t fork_pid;
