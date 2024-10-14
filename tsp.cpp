@@ -257,12 +257,18 @@ public:
         {
             free(dash_rf);
         }
+        if (is_openmpi)
+        {
+            if ( !rf_name.empty() ) {
+                std::filesystem::remove(rf_name);
+            }
+        }
     }
 
     void add_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
     {
-        auto rf = make_rankfile(procs, nslots);
-        const char *rf_str = rf.c_str();
+        rf_name = make_rankfile(procs, nslots);
+        const char *rf_str = rf_name.c_str();
         rf_copy = strdup(rf_str);
         dash_rf = strdup("-rf");
         proc_to_run.insert(proc_to_run.begin() + 1, rf_copy);
@@ -273,6 +279,7 @@ public:
 private:
     char *rf_copy = nullptr;
     char *dash_rf = nullptr;
+    std::filesystem::path rf_name;
     std::filesystem::path make_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
     {
         std::filesystem::path rank_file = "/tmp/" + std::to_string(getpid()) + "_rankfile.txt";
@@ -395,7 +402,6 @@ int main(int argc, char *argv[])
     {
         throw std::runtime_error("Unable to set CPU affinity");
     }
-    std::filesystem::path rf_path;
     if (cmd.is_openmpi)
     {
         cmd.add_rankfile(me.allowed_cores, nslots);
@@ -464,9 +470,5 @@ int main(int argc, char *argv[])
     }
 
     // Exit with status of forked process.
-    if (cmd.is_openmpi)
-    {
-        std::filesystem::remove(rf_path);
-    }
     exit(WEXITSTATUS(fork_stat));
 }
