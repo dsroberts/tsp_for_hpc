@@ -289,7 +289,7 @@ private:
         std::ofstream rf_stream(rank_file);
         if (rf_stream.is_open())
         {
-            for (uint32_t i; i < nslots; i++)
+            for (uint32_t i=0; i < nslots; i++)
             {
                 rf_stream << "rank " + std::to_string(i) + "=localhost slot=" + std::to_string(procs[i]) << std::endl;
             }
@@ -364,10 +364,20 @@ private:
     std::uniform_int_distribution<int> dist;
 };
 
+void die_with_err(std::string msg, int status)
+{
+    std::string out(msg);
+    out.append("\nstat=" + std::to_string(status) + ", errno=" + std::to_string(errno));
+    out.append(std::string("\n") + strerror(errno));
+    throw std::runtime_error(out);
+}
+
 int main(int argc, char *argv[])
 {
     Semaphore_File *sf = new Semaphore_File();
     Jitter jitter(JITTER_MS);
+    std::chrono::duration sleep(std::chrono::milliseconds(JITTER_MS + jitter.get()));
+    std::this_thread::sleep_for(sleep);
     // Parse args: only take the ones we use for now
     int c;
     uint32_t nslots(1);
@@ -397,7 +407,7 @@ int main(int argc, char *argv[])
         main_fork_pid = fork();
         if (main_fork_pid == -1)
         {
-            throw std::runtime_error("Unable to fork when forking requested");
+            die_with_err("Unable to fork when forking requested", main_fork_pid);
         }
         if (main_fork_pid != 0)
         {
@@ -424,7 +434,7 @@ int main(int argc, char *argv[])
     }
     if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1)
     {
-        throw std::runtime_error("Unable to set CPU affinity");
+        die_with_err("Unable to set CPU affinity", -1);
     }
     if (cmd.is_openmpi)
     {
@@ -453,6 +463,7 @@ int main(int argc, char *argv[])
             if (cmd.is_openmpi)
             {
                 setenv("OMPI_MCA_rmaps_base_mapping_policy", "", 1);
+                setenv("OMPI_MCA_rmaps_rank_file_physical","true",1);
             }
             ret = execvp(cmd.proc_to_run[0], &cmd.proc_to_run[0]);
             if (disappear_output)
@@ -462,12 +473,12 @@ int main(int argc, char *argv[])
 
             if (ret != 0)
             {
-                throw std::runtime_error("Error: could not exec " + std::string(cmd.proc_to_run[0]) + ". ret=" + std::to_string(fork_pid) + "errno=" + std::to_string(errno));
+                die_with_err("Error: could not exec " + std::string(cmd.proc_to_run[0]), ret);
             }
         }
         if (waited_on_pid == -1)
         {
-            throw std::runtime_error("Error: could not fork init subprocess. ret=" + std::to_string(fork_pid) + "errno=" + std::to_string(errno));
+            die_with_err("Error: could not fork init subprocess", waited_on_pid);
         }
         for (;;)
         {
@@ -484,13 +495,13 @@ int main(int argc, char *argv[])
     }
     if (fork_pid == -1)
     {
-        throw std::runtime_error("Error: could not fork into new pid namespace. ret=" + std::to_string(fork_pid) + "errno=" + std::to_string(errno));
+        die_with_err("Error: could not fork into new pid namespace", fork_pid);
     }
 
     pid_t ret_pid = waitpid(fork_pid, &fork_stat, 0);
     if (ret_pid == -1)
     {
-        throw std::runtime_error("Error: failed to wait for forked process. errno=" + std::to_string(errno));
+        die_with_err("Error: failed to wait for forked process", ret_pid);
     }
 
     // Exit with status of forked process.
