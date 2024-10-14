@@ -2,7 +2,6 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
-#include <format>
 #include <string>
 #include <filesystem>
 #include <stdexcept>
@@ -13,6 +12,7 @@
 #include <thread>
 #include <ranges>
 #include <cstring>
+#include <random>
 
 #include <unistd.h>
 #include <sys/wait.h>
@@ -23,6 +23,8 @@
 #define CGROUP_CPUSET_PATH_PREFIX "/sys/fs/cgroup/cpuset"
 #define CPUSET_FILE "/cpuset.cpus"
 #define SEMAPHORE_FILE_TEMPLATE "/tmp/tsp_hpc_is_waiting"
+#define BASE_WAIT_PERIOD 2
+#define JITTER_MS 250
 
 class Semaphore_File
 {
@@ -259,7 +261,8 @@ public:
         }
         if (is_openmpi)
         {
-            if ( !rf_name.empty() ) {
+            if (!rf_name.empty())
+            {
                 std::filesystem::remove(rf_name);
             }
         }
@@ -341,9 +344,30 @@ private:
     }
 };
 
+class Jitter
+{
+public:
+    Jitter(int limit)
+    {
+        std::random_device dev;
+        rng = std::mt19937(dev());
+        dist = std::uniform_int_distribution<int>(-abs(limit), abs(limit));
+    }
+    auto get()
+    {
+        return dist(rng);
+    }
+    ~Jitter() {}
+
+private:
+    std::mt19937 rng;
+    std::uniform_int_distribution<int> dist;
+};
+
 int main(int argc, char *argv[])
 {
     Semaphore_File *sf = new Semaphore_File();
+    Jitter jitter(JITTER_MS);
     // Parse args: only take the ones we use for now
     int c;
     uint32_t nslots(1);
@@ -390,7 +414,7 @@ int main(int argc, char *argv[])
 
     while (!me.allowed_to_run())
     {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::seconds(BASE_WAIT_PERIOD) + std::chrono::milliseconds(jitter.get()));
         me.refresh_allowed_cores();
     }
     delete sf;
