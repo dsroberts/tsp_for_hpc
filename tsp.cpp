@@ -402,7 +402,7 @@ int main(int argc, char *argv[])
         if (main_fork_pid != 0)
         {
             // We're done here
-            exit(0);
+            return 0;
         }
     }
 
@@ -480,7 +480,7 @@ int main(int argc, char *argv[])
                 }
             }
         }
-        exit(WEXITSTATUS(child_stat));
+        return WEXITSTATUS(child_stat);
     }
     if (fork_pid == -1)
     {
@@ -494,5 +494,5 @@ int main(int argc, char *argv[])
     }
 
     // Exit with status of forked process.
-    exit(WEXITSTATUS(fork_stat));
+    return WEXITSTATUS(fork_stat);
 }
