@@ -9,7 +9,7 @@
 
 namespace tsp
 {
-    Semaphore_File::Semaphore_File()
+    Semaphore_File::Semaphore_File() : fn(nullptr), fd(-1)
     {
 
         asprintf(&fn, "%s" SEMAPHORE_FILE_TEMPLATE ".XXXXXX", get_tmp());

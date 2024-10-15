@@ -15,7 +15,7 @@ namespace tsp
     class Status_Manager
     {
     public:
-        std::string jobid;
+        const std::string jobid;
         std::ofstream stat_file;
         Status_Manager(Run_cmd cmd, uint32_t slots);
         ~Status_Manager();
@@ -23,10 +23,10 @@ namespace tsp
         void job_end(int exit_stat);
 
     private:
-        std::chrono::time_point<std::chrono::system_clock> qtime;
+        const std::chrono::time_point<std::chrono::system_clock> qtime;
         std::chrono::time_point<std::chrono::system_clock> stime;
         std::chrono::time_point<std::chrono::system_clock> etime;
         std::string time_writer(std::chrono::time_point<std::chrono::system_clock> in);
-        void gen_jobid();
+        std::string gen_jobid();
     };
 }

@@ -2,7 +2,7 @@
 
 namespace tsp
 {
-    Jitter::Jitter(int limit)
+    Jitter::Jitter(int limit) : rng(), dist()
     {
         std::random_device dev;
         rng = std::mt19937(dev());

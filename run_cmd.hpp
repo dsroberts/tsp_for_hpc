@@ -15,8 +15,8 @@ namespace tsp
         void add_rankfile(std::vector<uint32_t> procs, uint32_t nslots);
 
     private:
-        char *rf_copy = nullptr;
-        char *dash_rf = nullptr;
+        char *rf_copy;
+        char *dash_rf;
         std::filesystem::path rf_name;
         std::filesystem::path make_rankfile(std::vector<uint32_t> procs, uint32_t nslots);
         bool check_mpi();
