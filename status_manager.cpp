@@ -6,14 +6,12 @@ namespace tsp
 {
     Status_Manager::Status_Manager(Run_cmd cmd, uint32_t slots) : jobid(gen_jobid()), qtime(std::chrono::system_clock::now()), stime(), etime()
     {
-        gen_jobid();
         std::string stat_fn(get_tmp());
         stat_fn.append(STATUS_FILE_TEMPLATE);
         stat_fn.append(jobid);
         stat_file.open(stat_fn);
         stat_file << "Command: " << cmd.print() << std::endl;
         stat_file << "Slots required: " << std::to_string(slots) << std::endl;
-        //qtime = std::chrono::system_clock::now();
         stat_file << "Enqueue time: " << time_writer(qtime) << std::endl;
     }
     Status_Manager::~Status_Manager()
