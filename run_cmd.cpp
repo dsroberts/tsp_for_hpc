@@ -8,7 +8,7 @@
 
 namespace tsp
 {
-    Run_cmd::Run_cmd(char *cmdline[], int start, int end) : proc_to_run(), is_openmpi(check_mpi()), rf_copy(nullptr), dash_rf(nullptr)
+    Run_cmd::Run_cmd(char *cmdline[], int start, int end) : proc_to_run(), is_openmpi(check_mpi()), rf_copy(nullptr), dash_rf(nullptr), rf_name()
     {
         for (int i = start; i < end; i++)
         {
