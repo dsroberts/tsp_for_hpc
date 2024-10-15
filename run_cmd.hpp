@@ -19,6 +19,6 @@ namespace tsp
         char *dash_rf;
         std::filesystem::path rf_name;
         std::filesystem::path make_rankfile(std::vector<uint32_t> procs, uint32_t nslots);
-        bool check_mpi();
+        bool check_mpi(const char* exe_name);
     };
 }

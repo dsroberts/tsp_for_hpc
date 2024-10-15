@@ -8,7 +8,7 @@
 
 namespace tsp
 {
-    Run_cmd::Run_cmd(char *cmdline[], int start, int end) : proc_to_run(), is_openmpi(check_mpi()), rf_copy(nullptr), dash_rf(nullptr), rf_name()
+    Run_cmd::Run_cmd(char *cmdline[], int start, int end) : is_openmpi(check_mpi(cmdline[0])), rf_copy(nullptr), dash_rf(nullptr), rf_name()
     {
         for (int i = start; i < end; i++)
         {
@@ -69,9 +69,9 @@ namespace tsp
         rf_stream.close();
         return rank_file;
     }
-    bool Run_cmd::check_mpi()
+    bool Run_cmd::check_mpi(const char *exe_name)
     {
-        std::string prog_name(proc_to_run[0]);
+        std::string prog_name(exe_name);
         if (prog_name == "mpirun" || prog_name == "mpiexec")
         {
             // OpenMPI does not respect parent process binding,

@@ -13,6 +13,8 @@ set(sources
     jitter.cpp
     run_cmd.cpp
     status_manager.cpp
+    output_manager.cpp
+    proc_manager.cpp
     tsp.cpp)
 
 add_executable(tsp-hpc ${sources})
