@@ -21,48 +21,18 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "functions.hpp"
+#include "jitter.hpp"
+#include "semaphore.hpp"
+#include "run_cmd.hpp"
+#include "status_manager.hpp"
+
 #define CGROUP_CPUSET_PATH_PREFIX "/sys/fs/cgroup/cpuset"
 #define CPUSET_FILE "/cpuset.cpus"
-#define SEMAPHORE_FILE_TEMPLATE "/tsp_hpc_is_waiting"
 #define BASE_WAIT_PERIOD 2
-#define JITTER_MS 250
 #define OUTPUT_FILE_TEMPLATE "/tsp.o"
 #define ERROR_FILE_TEMPLATE "/tsp.e"
-#define STATUS_FILE_TEMPLATE "/tsp.s"
 
-const char *get_tmp()
-{
-    const char *out = getenv("TMPDIR");
-    if (out == nullptr)
-    {
-        out = "/tmp";
-    }
-    return out;
-}
-
-class Semaphore_File
-{
-public:
-    Semaphore_File()
-    {
-
-        asprintf(&fn, "%s" SEMAPHORE_FILE_TEMPLATE ".XXXXXX", get_tmp());
-        if ((fd = mkstemp(fn)) == -1)
-        {
-            throw std::runtime_error("Unable to create semaphore file ret=" + std::to_string(fd) + " errno=" + std::to_string(errno));
-        }
-        unlink(fn);
-    }
-    ~Semaphore_File()
-    {
-        close(fd);
-        free(fn);
-    }
-
-private:
-    char *fn;
-    int fd;
-};
 
 class Tsp_Proc
 {
@@ -256,144 +226,6 @@ private:
     }
 };
 
-class Run_cmd
-{
-public:
-    std::vector<char *> proc_to_run;
-    bool is_openmpi;
-    Run_cmd(char *cmdline[], int start, int end)
-    {
-        for (int i = start; i < end; i++)
-        {
-            proc_to_run.push_back(cmdline[i]);
-        }
-        is_openmpi = check_mpi();
-    }
-    ~Run_cmd()
-    {
-        if (rf_copy != nullptr)
-        {
-            free(rf_copy);
-        }
-        if (dash_rf != nullptr)
-        {
-            free(dash_rf);
-        }
-        if (is_openmpi)
-        {
-            if (!rf_name.empty())
-            {
-                std::filesystem::remove(rf_name);
-            }
-        }
-    }
-
-    std::string print()
-    {
-        std::stringstream out;
-        for (const auto &i : proc_to_run)
-        {
-            out << i << " ";
-        }
-        return out.str();
-    }
-
-    void add_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
-    {
-        rf_name = make_rankfile(procs, nslots);
-        const char *rf_str = rf_name.c_str();
-        rf_copy = strdup(rf_str);
-        dash_rf = strdup("-rf");
-        proc_to_run.insert(proc_to_run.begin() + 1, rf_copy);
-        proc_to_run.insert(proc_to_run.begin() + 1, dash_rf);
-        proc_to_run.push_back(nullptr);
-    }
-
-private:
-    char *rf_copy = nullptr;
-    char *dash_rf = nullptr;
-    std::filesystem::path rf_name;
-    std::filesystem::path make_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
-    {
-        std::filesystem::path rank_file = "/tmp/" + std::to_string(getpid()) + "_rankfile.txt";
-        std::ofstream rf_stream(rank_file);
-        if (rf_stream.is_open())
-        {
-            for (uint32_t i = 0; i < nslots; i++)
-            {
-                rf_stream << "rank " + std::to_string(i) + "=localhost slot=" + std::to_string(procs[i]) << std::endl;
-            }
-        }
-        rf_stream.close();
-        return rank_file;
-    }
-    bool check_mpi()
-    {
-        std::string prog_name(proc_to_run[0]);
-        if (prog_name == "mpirun" || prog_name == "mpiexec")
-        {
-            // OpenMPI does not respect parent process binding,
-            // so we need to check if we're attempting to run
-            // OpenMPI, and if we are, we need to construct a
-            // rankfile and add it to the arguments. Note that
-            // this will explode if you're attempting anything
-            // other than by-core binding and mapping
-            int pipefd[2];
-            pipe(pipefd);
-            int fork_pid;
-            std::string mpi_version_output;
-            if (0 == (fork_pid = fork()))
-            {
-                close(pipefd[0]);
-                dup2(pipefd[1], 1);
-                close(pipefd[1]);
-                execlp(prog_name.c_str(), prog_name.c_str(), "--version", nullptr);
-            }
-            else
-            {
-                char buffer[1024];
-                close(pipefd[1]);
-                while (read(pipefd[0], buffer, sizeof(buffer)) != 0)
-                {
-                    mpi_version_output.append(buffer);
-                }
-                close(pipefd[0]);
-                if (waitpid(fork_pid, nullptr, 0) == -1)
-                {
-                    throw std::runtime_error("Error watiting for mpirun test process");
-                }
-            }
-            if (mpi_version_output.find("Open MPI") != std::string::npos ||
-                mpi_version_output.find("OpenRTE") != std::string::npos)
-            {
-                // OpenMPI detected...
-                return true;
-            }
-        }
-        return false;
-    }
-};
-
-class Jitter
-{
-public:
-    Jitter(int limit)
-    {
-        std::random_device dev;
-        rng = std::mt19937(dev());
-        dist = std::uniform_int_distribution<int>(-abs(limit), abs(limit));
-    }
-    auto get()
-    {
-        return dist(rng);
-    }
-    ~Jitter() {}
-
-private:
-    std::mt19937 rng;
-    std::uniform_int_distribution<int> dist;
-};
-
 class Output_handler
 {
 public:
@@ -448,118 +280,29 @@ private:
     char *stderr_fn = nullptr;
 };
 
-class Status_Writer
-{
-public:
-    std::string jobid;
-    std::ofstream stat_file;
-    Status_Writer(Run_cmd cmd, uint32_t slots)
-    {
-        gen_jobid();
-        std::string stat_fn(get_tmp());
-        stat_fn.append(STATUS_FILE_TEMPLATE);
-        stat_fn.append(jobid);
-        stat_file.open(stat_fn);
-        stat_file << "Command: " << cmd.print() << std::endl;
-        stat_file << "Slots required: " << std::to_string(slots) << std::endl;
-        qtime = std::chrono::system_clock::now();
-        stat_file << "Enqueue time: " << time_writer(qtime) << std::endl;
-    }
-    ~Status_Writer()
-    {
-        stat_file.close();
-    }
-
-    void job_start()
-    {
-        stime = std::chrono::system_clock::now();
-        stat_file << "Start time: " << time_writer(stime) << std::endl;
-    }
-
-    void job_end()
-    {
-        etime = std::chrono::system_clock::now();
-        auto dur = etime - stime;
-        stat_file << "End Time: " << time_writer(etime) << std::endl;
-        using namespace std::literals;
-        auto delta_t = (float)(dur/1us) / 1000000;
-        stat_file << "Time run: " << delta_t << std::endl;
-        stat_file.close();
-    }
-
-private:
-    std::chrono::time_point<std::chrono::system_clock> qtime;
-    std::chrono::time_point<std::chrono::system_clock> stime;
-    std::chrono::time_point<std::chrono::system_clock> etime;
-
-    std::string time_writer(std::chrono::time_point<std::chrono::system_clock> in)
-    {
-        const std::time_t t_c = std::chrono::system_clock::to_time_t(in);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&t_c), "%c");
-        return ss.str();
-    }
-
-    void gen_jobid()
-    {
-        // https://stackoverflow.com/questions/24365331/how-can-i-generate-uuid-in-c-without-using-boost-library
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<> dis(0, 15);
-        static std::uniform_int_distribution<> dis2(8, 11);
-
-        std::stringstream ss;
-        int i;
-        ss << std::hex;
-        for (i = 0; i < 8; i++)
-        {
-            ss << dis(gen);
-        }
-        ss << "-";
-        for (i = 0; i < 4; i++)
-        {
-            ss << dis(gen);
-        }
-        ss << "-4";
-        for (i = 0; i < 3; i++)
-        {
-            ss << dis(gen);
-        }
-        ss << "-";
-        ss << dis2(gen);
-        for (i = 0; i < 3; i++)
-        {
-            ss << dis(gen);
-        }
-        ss << "-";
-        for (i = 0; i < 12; i++)
-        {
-            ss << dis(gen);
-        }
-        jobid = ss.str();
-    }
-};
-
-void die_with_err(std::string msg, int status)
-{
-    std::string out(msg);
-    out.append("\nstat=" + std::to_string(status) + ", errno=" + std::to_string(errno));
-    out.append(std::string("\n") + strerror(errno));
-    throw std::runtime_error(out);
-}
-
 int main(int argc, char *argv[])
 {
-    Semaphore_File *sf = new Semaphore_File();
-    Jitter jitter(JITTER_MS);
-    std::chrono::duration sleep(std::chrono::milliseconds(JITTER_MS + jitter.get()));
-    std::this_thread::sleep_for(sleep);
+    tsp::Semaphore_File *sf = new tsp::Semaphore_File();
     // Parse args: only take the ones we use for now
     int c;
-    uint32_t nslots(1);
+    uint32_t nslots = 1;
     bool disappear_output = false;
     bool do_fork = true;
     bool separate_stderr = false;
+
+    if (argc == 1)
+    {
+        // List all jobs we're aware of
+        std::cout << "ID   State      Output               E-Level  Time         Command" << std::endl;
+        for (const auto &entry : std::filesystem::directory_iterator(get_tmp()))
+        {
+            if (entry.path().filename().string().find(STATUS_FILE_TEMPLATE) != std::string::npos)
+            {
+                std::ifstream stat_file(entry.path());
+
+            }
+        }
+    }
 
     while ((c = getopt(argc, argv, "+nfN:E")) != -1)
     {
@@ -596,8 +339,12 @@ int main(int argc, char *argv[])
         }
     }
 
-    Run_cmd cmd(argv, optind, argc);
-    Status_Writer stat(cmd, nslots);
+    tsp::Jitter jitter(JITTER_MS);
+    std::chrono::duration sleep(std::chrono::milliseconds(JITTER_MS + jitter.get()));
+    std::this_thread::sleep_for(sleep);
+
+    tsp::Run_cmd cmd(argv, optind, argc);
+    tsp::Status_Manager stat(cmd, nslots);
     Tsp_Proc me(nslots);
 
     cpu_set_t mask;
@@ -678,6 +425,6 @@ int main(int argc, char *argv[])
     }
 
     // Exit with status of forked process.
-    stat.job_end();
+    stat.job_end(WEXITSTATUS(fork_stat));
     return WEXITSTATUS(fork_stat);
 }
