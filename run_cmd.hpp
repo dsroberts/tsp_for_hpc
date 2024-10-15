@@ -8,7 +8,7 @@ namespace tsp
     {
     public:
         std::vector<char *> proc_to_run;
-        bool is_openmpi;
+        const bool is_openmpi;
         Run_cmd(char *cmdline[], int start, int end);
         ~Run_cmd();
         std::string print();

@@ -8,13 +8,12 @@
 
 namespace tsp
 {
-    Run_cmd::Run_cmd(char *cmdline[], int start, int end) : proc_to_run(), is_openmpi(false), rf_copy(nullptr), dash_rf(nullptr)
+    Run_cmd::Run_cmd(char *cmdline[], int start, int end) : proc_to_run(), is_openmpi(check_mpi()), rf_copy(nullptr), dash_rf(nullptr)
     {
         for (int i = start; i < end; i++)
         {
             proc_to_run.push_back(cmdline[i]);
         }
-        is_openmpi = check_mpi();
     }
     Run_cmd::~Run_cmd()
     {
