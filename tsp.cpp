@@ -13,6 +13,7 @@
 #include <ranges>
 #include <cstring>
 #include <random>
+#include <iomanip>
 
 #include <unistd.h>
 #include <sys/wait.h>
@@ -22,16 +23,30 @@
 
 #define CGROUP_CPUSET_PATH_PREFIX "/sys/fs/cgroup/cpuset"
 #define CPUSET_FILE "/cpuset.cpus"
-#define SEMAPHORE_FILE_TEMPLATE "/tmp/tsp_hpc_is_waiting"
+#define SEMAPHORE_FILE_TEMPLATE "/tsp_hpc_is_waiting"
 #define BASE_WAIT_PERIOD 2
 #define JITTER_MS 250
+#define OUTPUT_FILE_TEMPLATE "/tsp.o"
+#define ERROR_FILE_TEMPLATE "/tsp.e"
+#define STATUS_FILE_TEMPLATE "/tsp.s"
+
+const char *get_tmp()
+{
+    const char *out = getenv("TMPDIR");
+    if (out == nullptr)
+    {
+        out = "/tmp";
+    }
+    return out;
+}
 
 class Semaphore_File
 {
 public:
     Semaphore_File()
     {
-        fn = strdup(SEMAPHORE_FILE_TEMPLATE ".XXXXXX");
+
+        asprintf(&fn, "%s" SEMAPHORE_FILE_TEMPLATE ".XXXXXX", get_tmp());
         if ((fd = mkstemp(fn)) == -1)
         {
             throw std::runtime_error("Unable to create semaphore file ret=" + std::to_string(fd) + " errno=" + std::to_string(errno));
@@ -110,9 +125,17 @@ private:
             }
             if (std::filesystem::exists(entry.path() / "exe"))
             {
-                if (std::filesystem::read_symlink(entry.path() / "exe") == my_path)
+                try
                 {
-                    out.push_back(std::stoul(entry.path().filename()));
+                    if (std::filesystem::read_symlink(entry.path() / "exe") == my_path)
+                    {
+                        out.push_back(std::stoul(entry.path().filename()));
+                    }
+                }
+                catch (std::filesystem::filesystem_error &e)
+                {
+                    // process went away
+                    continue;
                 }
             }
         }
@@ -149,24 +172,21 @@ private:
         std::vector<uint32_t> out;
         cpu_set_t mask;
         // Just return an empty vector if the semaphore file is present
-        for (const auto &entry : std::filesystem::directory_iterator("/proc/" + std::to_string(pid) + "/fd"))
+        try
         {
-            try
-            {
+            for (const auto &entry : std::filesystem::directory_iterator("/proc/" + std::to_string(pid) + "/fd"))
                 if (std::filesystem::read_symlink(entry).string().find(SEMAPHORE_FILE_TEMPLATE) != std::string::npos)
                 {
                     // Semaphore present, ignore
                     return out;
                 }
-            }
-            catch (std::filesystem::filesystem_error &e)
-            {
-                // Symlink was deleted before we read it, so
-                // we actually do care about this process's
-                // affinity
-            }
         }
 
+        catch (std::filesystem::filesystem_error &e)
+        {
+            // Process went away
+            return out;
+        }
         if (sched_getaffinity(pid, sizeof(mask), &mask) == -1)
         {
             // Process may have been killed - so it isn't taking
@@ -268,6 +288,16 @@ public:
         }
     }
 
+    std::string print()
+    {
+        std::stringstream out;
+        for (const auto &i : proc_to_run)
+        {
+            out << i << " ";
+        }
+        return out.str();
+    }
+
     void add_rankfile(std::vector<uint32_t> procs, uint32_t nslots)
     {
         rf_name = make_rankfile(procs, nslots);
@@ -289,7 +319,7 @@ private:
         std::ofstream rf_stream(rank_file);
         if (rf_stream.is_open())
         {
-            for (uint32_t i=0; i < nslots; i++)
+            for (uint32_t i = 0; i < nslots; i++)
             {
                 rf_stream << "rank " + std::to_string(i) + "=localhost slot=" + std::to_string(procs[i]) << std::endl;
             }
@@ -364,6 +394,152 @@ private:
     std::uniform_int_distribution<int> dist;
 };
 
+class Output_handler
+{
+public:
+    int stdout_fd = -1;
+    int stderr_fd = -1;
+    Output_handler(bool disappear, bool separate_stderr, const char *jobid)
+    {
+        if (disappear)
+        {
+            stdout_fd = open("/dev/null", O_WRONLY | O_CREAT, 0666);
+            stderr_fd = open("/dev/null", O_WRONLY | O_CREAT, 0666);
+        }
+        else
+        {
+            asprintf(&stdout_fn, "%s" OUTPUT_FILE_TEMPLATE "%s", get_tmp(), jobid);
+            stdout_fd = open(stdout_fn, O_WRONLY | O_CREAT, 0600);
+            dup2(stdout_fd, 1);
+            if (separate_stderr)
+            {
+                asprintf(&stderr_fn, "%s" ERROR_FILE_TEMPLATE "%s", get_tmp(), jobid);
+                dup2(stderr_fd, 2);
+                stderr_fd = open(stderr_fn, O_WRONLY | O_CREAT, 0600);
+            }
+            else
+            {
+                dup2(stdout_fd, 2);
+            }
+        }
+    }
+    ~Output_handler()
+    {
+        if (stdout_fn != nullptr)
+        {
+            free(stdout_fn);
+        }
+        if (stderr_fn != nullptr)
+        {
+            free(stderr_fn);
+        }
+        if (stdout_fd != -1)
+        {
+            close(stdout_fd);
+        }
+        if (stderr_fd != -1)
+        {
+            close(stderr_fd);
+        }
+    }
+
+private:
+    char *stdout_fn = nullptr;
+    char *stderr_fn = nullptr;
+};
+
+class Status_Writer
+{
+public:
+    std::string jobid;
+    std::ofstream stat_file;
+    Status_Writer(Run_cmd cmd, uint32_t slots)
+    {
+        gen_jobid();
+        std::string stat_fn(get_tmp());
+        stat_fn.append(STATUS_FILE_TEMPLATE);
+        stat_fn.append(jobid);
+        stat_file.open(stat_fn);
+        stat_file << "Command: " << cmd.print() << std::endl;
+        stat_file << "Slots required: " << std::to_string(slots) << std::endl;
+        qtime = std::chrono::system_clock::now();
+        stat_file << "Enqueue time: " << time_writer(qtime) << std::endl;
+    }
+    ~Status_Writer()
+    {
+        stat_file.close();
+    }
+
+    void job_start()
+    {
+        stime = std::chrono::system_clock::now();
+        stat_file << "Start time: " << time_writer(stime) << std::endl;
+    }
+
+    void job_end()
+    {
+        etime = std::chrono::system_clock::now();
+        auto dur = etime - stime;
+        stat_file << "End Time: " << time_writer(etime) << std::endl;
+        using namespace std::literals;
+        auto delta_t = (float)(dur/1us) / 1000000;
+        stat_file << "Time run: " << delta_t << std::endl;
+        stat_file.close();
+    }
+
+private:
+    std::chrono::time_point<std::chrono::system_clock> qtime;
+    std::chrono::time_point<std::chrono::system_clock> stime;
+    std::chrono::time_point<std::chrono::system_clock> etime;
+
+    std::string time_writer(std::chrono::time_point<std::chrono::system_clock> in)
+    {
+        const std::time_t t_c = std::chrono::system_clock::to_time_t(in);
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&t_c), "%c");
+        return ss.str();
+    }
+
+    void gen_jobid()
+    {
+        // https://stackoverflow.com/questions/24365331/how-can-i-generate-uuid-in-c-without-using-boost-library
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static std::uniform_int_distribution<> dis(0, 15);
+        static std::uniform_int_distribution<> dis2(8, 11);
+
+        std::stringstream ss;
+        int i;
+        ss << std::hex;
+        for (i = 0; i < 8; i++)
+        {
+            ss << dis(gen);
+        }
+        ss << "-";
+        for (i = 0; i < 4; i++)
+        {
+            ss << dis(gen);
+        }
+        ss << "-4";
+        for (i = 0; i < 3; i++)
+        {
+            ss << dis(gen);
+        }
+        ss << "-";
+        ss << dis2(gen);
+        for (i = 0; i < 3; i++)
+        {
+            ss << dis(gen);
+        }
+        ss << "-";
+        for (i = 0; i < 12; i++)
+        {
+            ss << dis(gen);
+        }
+        jobid = ss.str();
+    }
+};
+
 void die_with_err(std::string msg, int status)
 {
     std::string out(msg);
@@ -383,8 +559,9 @@ int main(int argc, char *argv[])
     uint32_t nslots(1);
     bool disappear_output = false;
     bool do_fork = true;
+    bool separate_stderr = false;
 
-    while ((c = getopt(argc, argv, "+nfN:")) != -1)
+    while ((c = getopt(argc, argv, "+nfN:E")) != -1)
     {
         switch (c)
         {
@@ -397,6 +574,9 @@ int main(int argc, char *argv[])
             break;
         case 'N':
             nslots = std::stoul(optarg);
+            break;
+        case 'E':
+            separate_stderr = true;
             break;
         }
     }
@@ -417,6 +597,7 @@ int main(int argc, char *argv[])
     }
 
     Run_cmd cmd(argv, optind, argc);
+    Status_Writer stat(cmd, nslots);
     Tsp_Proc me(nslots);
 
     cpu_set_t mask;
@@ -427,6 +608,7 @@ int main(int argc, char *argv[])
         std::this_thread::sleep_for(std::chrono::seconds(BASE_WAIT_PERIOD) + std::chrono::milliseconds(jitter.get()));
         me.refresh_allowed_cores();
     }
+    stat.job_start();
     delete sf;
     for (uint32_t i = 0; i < nslots; i++)
     {
@@ -453,23 +635,14 @@ int main(int argc, char *argv[])
         pid_t waited_on_pid;
         if (0 == (waited_on_pid = fork()))
         {
-            int fd;
-            if (disappear_output)
-            {
-                fd = open("/dev/null", O_WRONLY | O_CREAT, 0666);
-                dup2(fd, 1);
-                dup2(fd, 2);
-            }
+            Output_handler *handler = new Output_handler(disappear_output, separate_stderr, stat.jobid.c_str());
             if (cmd.is_openmpi)
             {
                 setenv("OMPI_MCA_rmaps_base_mapping_policy", "", 1);
-                setenv("OMPI_MCA_rmaps_rank_file_physical","true",1);
+                setenv("OMPI_MCA_rmaps_rank_file_physical", "true", 1);
             }
             ret = execvp(cmd.proc_to_run[0], &cmd.proc_to_run[0]);
-            if (disappear_output)
-            {
-                close(fd);
-            }
+            delete handler;
 
             if (ret != 0)
             {
@@ -505,5 +678,6 @@ int main(int argc, char *argv[])
     }
 
     // Exit with status of forked process.
+    stat.job_end();
     return WEXITSTATUS(fork_stat);
 }
