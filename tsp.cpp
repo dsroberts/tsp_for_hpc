@@ -22,28 +22,14 @@
 
 int main(int argc, char *argv[])
 {
-    tsp::Semaphore_File *sf = new tsp::Semaphore_File();
-    // Parse args: only take the ones we use for now
+    tsp::Status_Manager stat;
     int c;
     uint32_t nslots = 1;
     bool disappear_output = false;
     bool do_fork = true;
     bool separate_stderr = false;
 
-    if (argc == 1)
-    {
-        // List all jobs we're aware of
-        std::cout << "ID   State      Output               E-Level  Time         Command" << std::endl;
-        for (const auto &entry : std::filesystem::directory_iterator(get_tmp()))
-        {
-            if (entry.path().filename().string().find(STATUS_FILE_TEMPLATE) != std::string::npos)
-            {
-                std::ifstream stat_file(entry.path());
-
-            }
-        }
-    }
-
+    // Parse args: only take the ones we use for now
     while ((c = getopt(argc, argv, "+nfN:E")) != -1)
     {
         switch (c)
@@ -64,6 +50,9 @@ int main(int argc, char *argv[])
         }
     }
 
+    tsp::Run_cmd cmd(argv, optind, argc);
+    stat.add_cmd(cmd,nslots);
+
     if (do_fork)
     {
         pid_t main_fork_pid;
@@ -83,8 +72,6 @@ int main(int argc, char *argv[])
     std::chrono::duration sleep(std::chrono::milliseconds(JITTER_MS + jitter.get()));
     std::this_thread::sleep_for(sleep);
 
-    tsp::Run_cmd cmd(argv, optind, argc);
-    tsp::Status_Manager stat(cmd, nslots);
     tsp::Tsp_Proc me(nslots);
 
     cpu_set_t mask;
@@ -96,7 +83,7 @@ int main(int argc, char *argv[])
         me.refresh_allowed_cores();
     }
     stat.job_start();
-    delete sf;
+    //delete sf;
     for (uint32_t i = 0; i < nslots; i++)
     {
         CPU_SET(me.allowed_cores[i], &mask);

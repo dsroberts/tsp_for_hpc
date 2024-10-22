@@ -17,8 +17,9 @@ namespace tsp
     public:
         const std::string jobid;
         std::ofstream stat_file;
-        Status_Manager(Run_cmd cmd, uint32_t slots);
+        Status_Manager();
         ~Status_Manager();
+        void add_cmd(Run_cmd cmd, uint32_t slots);
         void job_start();
         void job_end(int exit_stat);
 
