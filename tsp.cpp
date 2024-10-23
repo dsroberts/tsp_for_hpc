@@ -15,13 +15,14 @@
 #include "semaphore.hpp"
 #include "run_cmd.hpp"
 #include "status_manager.hpp"
-#include "proc_manager.hpp"
+#include "proc_affinity.hpp"
 #include "output_manager.hpp"
 
 #define BASE_WAIT_PERIOD 2
 
 int main(int argc, char *argv[])
 {
+    tsp::Semaphore_File *sf = new tsp::Semaphore_File();
     tsp::Status_Manager stat;
     int c;
     uint32_t nslots = 1;
@@ -51,7 +52,7 @@ int main(int argc, char *argv[])
     }
 
     tsp::Run_cmd cmd(argv, optind, argc);
-    stat.add_cmd(cmd,nslots);
+    stat.add_cmd(cmd, nslots);
 
     if (do_fork)
     {
@@ -72,29 +73,22 @@ int main(int argc, char *argv[])
     std::chrono::duration sleep(std::chrono::milliseconds(JITTER_MS + jitter.get()));
     std::this_thread::sleep_for(sleep);
 
-    tsp::Tsp_Proc me(nslots);
+    tsp::Proc_affinity binder(nslots,getpid());
 
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-
-    while (!me.allowed_to_run())
+    std::vector<uint32_t> bound_cores;
+    while (bound_cores.size() < nslots)
     {
-        std::this_thread::sleep_for(std::chrono::seconds(BASE_WAIT_PERIOD) + std::chrono::milliseconds(jitter.get()));
-        me.refresh_allowed_cores();
+        while (!stat.allowed_to_run())
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(BASE_WAIT_PERIOD) + std::chrono::milliseconds(jitter.get()));
+        }
+        stat.job_start();
+        bound_cores = binder.bind();
     }
-    stat.job_start();
-    //delete sf;
-    for (uint32_t i = 0; i < nslots; i++)
-    {
-        CPU_SET(me.allowed_cores[i], &mask);
-    }
-    if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1)
-    {
-        die_with_err("Unable to set CPU affinity", -1);
-    }
+    delete sf;
     if (cmd.is_openmpi)
     {
-        cmd.add_rankfile(me.allowed_cores, nslots);
+        cmd.add_rankfile(bound_cores, nslots);
     }
 
     pid_t fork_pid;

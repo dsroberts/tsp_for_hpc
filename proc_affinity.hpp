@@ -8,28 +8,23 @@
 #include <filesystem>
 #include <sys/types.h>
 
-#define CGROUP_CPUSET_PATH_PREFIX "/sys/fs/cgroup/cpuset"
-#define CPUSET_FILE "/cpuset.cpus"
-
 namespace tsp
 {
-    class Tsp_Proc
+    class Proc_affinity
     {
     public:
-        const pid_t pid;
-        std::vector<uint32_t> allowed_cores;
-        Tsp_Proc(uint32_t nslots);
-        bool allowed_to_run();
-        void refresh_allowed_cores();
-        ~Tsp_Proc() {};
+        Proc_affinity(uint32_t nslots, pid_t pid);
+        ~Proc_affinity() {};
+        std::vector<uint32_t> bind();
 
     private:
         const uint32_t nslots;
+        const pid_t pid;
         const std::filesystem::path my_path;
         const std::vector<uint32_t> cpuset_from_cgroup;
+        cpu_set_t mask;
         std::vector<pid_t> get_siblings();
-        std::vector<std::uint32_t> parse_cpuset_range(std::string in);
         std::vector<uint32_t> get_sibling_affinity(pid_t pid);
-        std::vector<uint32_t> get_cgroup();
+        std::vector<std::string> skip_paths = {std::to_string(pid), "self", "thread-self"};
     };
 }

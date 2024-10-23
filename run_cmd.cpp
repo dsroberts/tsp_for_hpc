@@ -14,6 +14,7 @@ namespace tsp
         {
             proc_to_run.push_back(cmdline[i]);
         }
+        proc_to_run.push_back(nullptr);
     }
     Run_cmd::~Run_cmd()
     {

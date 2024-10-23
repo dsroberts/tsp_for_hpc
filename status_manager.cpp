@@ -1,44 +1,86 @@
 #include <random>
+#include <stdexcept>
 
+#include <sqlite3.h>
 #include "status_manager.hpp"
+#include "functions.hpp"
 
 namespace tsp
 {
-    Status_Manager::Status_Manager() : jobid(gen_jobid()), qtime(std::chrono::system_clock::now()), stime(), etime()
+
+    Status_Manager::Status_Manager() : jobid(gen_jobid()), started(false), total_slots(get_cgroup().size())
     {
         std::string stat_fn(get_tmp());
         stat_fn.append(STATUS_FILE_TEMPLATE);
-        stat_fn.append(jobid);
-        stat_file.open(stat_fn);
-        stat_file << "Enqueue time: " << time_writer(qtime) << std::endl;
+        if ((sqlite_ret = sqlite3_open_v2(stat_fn.c_str(), &conn, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr)) != SQLITE_OK)
+        {
+            throw std::runtime_error("Unable to open database");
+        }
+        // Wait a long time if we have to
+        if (( sqlite_ret = sqlite3_busy_timeout(conn,10000) ) != SQLITE_OK ) {
+            throw std::runtime_error(std::string("Unable to set busy timeout :"));
+        }
+        if ((sqlite_ret = sqlite3_exec(conn, db_initialise.c_str(), nullptr, nullptr, &sqlite_err)) != SQLITE_OK)
+        {
+            throw std::runtime_error(std::string("Error initialising database :") + sqlite_err);
+        }
     }
     Status_Manager::~Status_Manager()
     {
-        stat_file.close();
+        sqlite3_close_v2(conn);
     }
 
-    void Status_Manager::add_cmd(Run_cmd cmd, uint32_t slots)
+    void Status_Manager::add_cmd(Run_cmd cmd, uint32_t nslots)
     {
-        stat_file << "Command: " << cmd.print() << std::endl;
-        stat_file << "Slots required: " << std::to_string(slots) << std::endl;
+        slots_req = nslots;
+        if ((sqlite_ret = sqlite3_exec(conn, std::string("INSERT INTO jobs(uuid,command,slots) VALUES (\"" + jobid + "\",\"" + cmd.print() + "\"," + std::to_string(slots_req) + ");").c_str(), nullptr, nullptr, &sqlite_err)) != SQLITE_OK)
+        {
+            throw std::runtime_error(std::string("Unable to insert command into database: ") + sqlite_err);
+        }
+        if ((sqlite_ret = sqlite3_exec(conn, std::string("INSERT INTO qtime(jobid) SELECT id FROM jobs WHERE uuid = \"" + jobid + "\";").c_str(), nullptr, nullptr, &sqlite_err)) != SQLITE_OK)
+        {
+            throw std::runtime_error(std::string("Unable to insert qtime into database: ") + sqlite_err);
+        }
+    }
+
+    int Status_Manager::slots_callback(void *slots_avail_void, int ncols, char **out, char **cols)
+    {
+        uint32_t *slots_used = reinterpret_cast<uint32_t *>(slots_avail_void);
+        try
+        {
+            *slots_used = std::stoi(std::string(out[0]));
+            return 0;
+        }
+        catch (std::exception_ptr e)
+        {
+            return 1;
+        }
+    }
+
+    bool Status_Manager::allowed_to_run()
+    {
+        if ((sqlite_ret = sqlite3_exec(conn, "SELECT * FROM used_slots", Status_Manager::slots_callback, reinterpret_cast<void *>(&slots_used), &sqlite_err)) != SQLITE_OK)
+        {
+            throw std::runtime_error(std::string("Unable to get used slots from database: ") + sqlite_err);
+        }
+        return (total_slots - slots_used) >= slots_req;
     }
 
     void Status_Manager::job_start()
     {
-        stime = std::chrono::system_clock::now();
-        stat_file << "Start time: " << time_writer(stime) << std::endl;
+        if ((sqlite_ret = sqlite3_exec(conn, std::string("INSERT INTO stime(jobid) SELECT id FROM jobs WHERE uuid = \"" + jobid + "\";").c_str(), nullptr, nullptr, &sqlite_err)) != SQLITE_OK)
+        {
+            throw std::runtime_error(std::string("Unable to insert stime into database: ") + sqlite_err);
+        }
+        started = true;
     }
 
     void Status_Manager::job_end(int exit_stat)
     {
-        etime = std::chrono::system_clock::now();
-        auto dur = etime - stime;
-        stat_file << "End Time: " << time_writer(etime) << std::endl;
-        using namespace std::literals;
-        auto delta_t = (float)(dur / 1us) / 1000000;
-        stat_file << "Time run: " << delta_t << std::endl;
-        stat_file << "Exit status: died with exit code " << std::to_string(exit_stat) << std::endl;
-        stat_file.close();
+        if ((sqlite_ret = sqlite3_exec(conn, std::string("INSERT INTO etime(jobid,exit_status) SELECT id," + std::to_string(exit_stat) + " FROM jobs WHERE uuid = \"" + jobid + "\";").c_str(), nullptr, nullptr, &sqlite_err)) != SQLITE_OK)
+        {
+            throw std::runtime_error(std::string("Unable to insert etime into database: ") + sqlite_err);
+        }
     }
 
     std::string Status_Manager::time_writer(std::chrono::time_point<std::chrono::system_clock> in)
