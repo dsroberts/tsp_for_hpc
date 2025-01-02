@@ -1,19 +1,17 @@
 #pragma once
+#include <chrono>
+#include <cstdint>
 #include <random>
 
-#define JITTER_MS 250
+namespace tsp {
+constexpr std::chrono::milliseconds jitter_ms{250};
+class Jitter {
+public:
+  Jitter(std::chrono::milliseconds limit);
+  std::chrono::milliseconds get();
 
-namespace tsp
-{
-    class Jitter
-    {
-    public:
-        Jitter(int limit);
-        int get();
-        ~Jitter() {};
-
-    private:
-        std::mt19937 rng;
-        std::uniform_int_distribution<int> dist;
-    };
-}
+private:
+  std::mt19937 rng;
+  std::uniform_int_distribution<int64_t> dist;
+};
+} // namespace tsp
