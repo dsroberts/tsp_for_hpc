@@ -11,7 +11,7 @@ public:
   std::chrono::milliseconds get();
 
 private:
-  std::mt19937 rng;
-  std::uniform_int_distribution<int64_t> dist;
+  std::mt19937 rng_;
+  std::uniform_int_distribution<int64_t> dist_;
 };
 } // namespace tsp

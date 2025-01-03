@@ -7,8 +7,6 @@ constexpr std::string err_file_template{"tsp.e"};
 namespace tsp {
 class Output_handler {
 public:
-  int stdout_fd;
-  int stderr_fd;
   Output_handler(bool disappear, bool separate_stderr, std::string jobid,
                  bool rw);
   void init_pipes();
@@ -16,10 +14,12 @@ public:
   ~Output_handler();
 
 private:
-  std::string stdout_fn{};
-  std::string stderr_fn{};
+  std::string stdout_fn_{};
+  std::string stderr_fn_{};
+  int stdout_fd_;
+  int stderr_fd_;
   bool disappear_;
   bool separate_stderr_;
-  std::pair<std::string, std::string> out_bufs{};
+  std::pair<std::string, std::string> out_bufs_{};
 };
 } // namespace tsp

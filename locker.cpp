@@ -12,16 +12,20 @@
 #include "functions.hpp"
 
 namespace tsp {
+
+std::array<sighandler_t, NSIG> prev_sigs;
+
 int lockfile_fd = -1;
 void handle_signal(int sig) {
   if (lockfile_fd != -1) {
     flock(lockfile_fd, LOCK_UN);
     close(lockfile_fd);
   }
+  prev_sigs[sig](sig);
 }
 
 Locker::Locker() {
-  lockfile_fd = open(lock_file_path.c_str(), O_WRONLY | O_CREAT, 0600);
+  lockfile_fd = open(lock_file_path_.c_str(), O_RDONLY | O_CREAT, 0600);
   if (lockfile_fd == -1) {
     die_with_err_errno("Unable to open lockfile", lockfile_fd);
   }

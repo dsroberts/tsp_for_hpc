@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <ranges>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -12,38 +13,57 @@
 
 namespace tsp {
 Run_cmd::Run_cmd(char *cmdline[], int start, int end)
-    : is_openmpi(check_mpi(cmdline[0])), rf_name(get_tmp()) {
+    : is_openmpi(check_mpi(cmdline[start])) {
   for (int i = start; i < end; i++) {
-    proc_to_run.push_back(cmdline[i]);
+    proc_to_run_.emplace_back(cmdline[i]);
   }
-  proc_to_run.push_back(nullptr);
 }
+
 Run_cmd::~Run_cmd() {
   if (is_openmpi) {
-    if (!rf_name.empty()) {
-      std::filesystem::remove(rf_name);
+    if (!rf_name_.empty()) {
+      std::filesystem::remove(rf_name_);
+    }
+    if (argv_holder_ != nullptr) {
+      free(argv_holder_);
     }
   }
 }
 
 std::string Run_cmd::print() {
   std::stringstream out;
-  for (const auto &i : proc_to_run) {
+  for (const auto &i : proc_to_run_) {
     out << i << " ";
   }
   return out.str();
 }
 
+const char *Run_cmd::get_argv_0() { return proc_to_run_[0].c_str(); }
+
+char **Run_cmd::get_argv() {
+  // Do it the old fashioned way
+  if (argv_holder_ == nullptr) {
+    if (nullptr == (argv_holder_ = static_cast<char **>(
+                        malloc((proc_to_run_.size() + 1) * sizeof(char *))))) {
+      die_with_err_errno("Malloc failed", -1);
+    }
+    for (const auto &[i, p] : std::views::enumerate(proc_to_run_)) {
+      argv_holder_[i] = p.data();
+    }
+    argv_holder_[proc_to_run_.size()] = nullptr;
+  }
+  return argv_holder_;
+}
+
 void Run_cmd::add_rankfile(std::vector<uint32_t> procs, uint32_t nslots) {
   make_rankfile(procs, nslots);
-  proc_to_run.insert(proc_to_run.begin() + 1, rf_name.string().data());
-  proc_to_run.insert(proc_to_run.begin() + 1, std::string("rf").data());
-  proc_to_run.push_back(nullptr);
+  proc_to_run_.emplace(proc_to_run_.begin() + 1, rf_name_);
+  proc_to_run_.emplace(proc_to_run_.begin() + 1, "-rf");
 }
 
 void Run_cmd::make_rankfile(std::vector<uint32_t> procs, uint32_t nslots) {
-  rf_name /= std::to_string(getpid()) + "_rankfile.txt";
-  std::ofstream rf_stream(rf_name);
+  rf_name_ = get_tmp() / (std::to_string(getpid()) + "_rankfile.txt");
+  std::ofstream rf_stream(rf_name_);
   if (rf_stream.is_open()) {
     for (uint32_t i = 0; i < nslots; i++) {
       rf_stream << "rank " + std::to_string(i) +
@@ -55,7 +75,11 @@ void Run_cmd::make_rankfile(std::vector<uint32_t> procs, uint32_t nslots) {
 }
 bool Run_cmd::check_mpi(const char *exe_name) {
   std::string prog_name(exe_name);
-  if (prog_name == "mpirun" || prog_name == "mpiexec") {
+  std::string prog_test(prog_name);
+  if (prog_name.starts_with('/')) {
+    prog_test = std::filesystem::path(prog_name).filename().string();
+  }
+  if (prog_test == "mpirun" || prog_test == "mpiexec") {
     // OpenMPI does not respect parent process binding,
     // so we need to check if we're attempting to run
     // OpenMPI, and if we are, we need to construct a

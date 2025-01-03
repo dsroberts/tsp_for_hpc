@@ -5,20 +5,21 @@
 #include <numeric>
 
 #include "functions.hpp"
+#include "status_manager.hpp"
 
 namespace tsp {
 
-Proc_affinity::Proc_affinity(uint32_t nslots, pid_t pid)
-    : nslots(nslots), pid(pid),
-      my_path(std::filesystem::read_symlink("/proc/self/exe")),
-      cpuset_from_cgroup(get_cgroup()) {
+Proc_affinity::Proc_affinity(Status_Manager &sm, uint32_t nslots, pid_t pid)
+    : sm_(sm), nslots_(nslots), pid_(pid),
+      my_path_(std::filesystem::read_symlink("/proc/self/exe")),
+      cpuset_from_cgroup_(get_cgroup()) {
   // Open cgroups file
-  if (nslots > cpuset_from_cgroup.size()) {
+  if (nslots > cpuset_from_cgroup_.size()) {
     die_with_err("More slots requested than available on the system, this "
                  "process can never run.",
                  -1);
   }
-  CPU_ZERO(&mask);
+  CPU_ZERO(&mask_);
 }
 
 std::vector<uint32_t> Proc_affinity::bind() {
@@ -31,52 +32,42 @@ std::vector<uint32_t> Proc_affinity::bind() {
   }
   std::sort(siblings_affinity.begin(), siblings_affinity.end());
   std::vector<uint32_t> allowed_cores;
-  std::set_difference(cpuset_from_cgroup.begin(), cpuset_from_cgroup.end(),
+  std::set_difference(cpuset_from_cgroup_.begin(), cpuset_from_cgroup_.end(),
                       siblings_affinity.begin(), siblings_affinity.end(),
                       std::inserter(allowed_cores, allowed_cores.begin()));
 
-  for (auto i = 0ul; i < nslots; i++) {
-    CPU_SET(allowed_cores[i], &mask);
+  for (auto i = 0ul; i < nslots_; i++) {
+    CPU_SET(allowed_cores[i], &mask_);
     out.push_back(allowed_cores[i]);
   }
-  if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) == -1) {
+  if (sched_setaffinity(0, sizeof(cpu_set_t), &mask_) == -1) {
     die_with_err_errno("Unable to set CPU affinity", -1);
   }
   return out;
 }
 
 std::vector<pid_t> Proc_affinity::get_siblings() {
-  std::vector<pid_t> out;
-  // Find all the other versions of this application running
-  for (const auto &entry : std::filesystem::directory_iterator("/proc")) {
-    if (std::find(skip_paths.begin(), skip_paths.end(),
-                  entry.path().filename()) != skip_paths.end()) {
-      continue;
-    }
-    if (std::filesystem::exists(entry.path() / "exe")) {
-      try {
-        if (std::filesystem::read_symlink(entry.path() / "exe") == my_path) {
-          out.push_back(std::stoul(entry.path().filename()));
-        }
-      } catch (std::filesystem::filesystem_error &e) {
-        // process went away
-        continue;
-      }
+  auto all_tsp_pids = sm_.get_running_job_pids();
+  for (std::vector<pid_t>::iterator it = all_tsp_pids.begin();
+       it != all_tsp_pids.end();) {
+    if (*it == pid_) {
+      all_tsp_pids.erase(it);
+    } else {
+      it++;
     }
   }
-  return out;
+  return all_tsp_pids;
 };
 
 std::vector<uint32_t> Proc_affinity::get_sibling_affinity(pid_t pid) {
   std::vector<uint32_t> out;
   cpu_set_t mask;
-  // Just return an empty vector if the semaphore file is present
   if (sched_getaffinity(pid, sizeof(mask), &mask) == -1) {
     // Process may have been killed - so it isn't taking
     // resources any more
     return out;
   }
-  for (const auto &i : cpuset_from_cgroup) {
+  for (const auto &i : cpuset_from_cgroup_) {
     if (CPU_ISSET(i, &mask)) {
       out.push_back(i);
     }

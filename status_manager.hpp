@@ -16,7 +16,7 @@ const std::string db_initialise(
     "PRAGMA foreign_keys = ON;"
     // Create command table
     "CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-    "uuid TEXT, command TEXT, category TEXT, slots INTEGER);"
+    "uuid TEXT, command TEXT, category TEXT, pid INTEGER, slots INTEGER);"
     // Create queue time table
     "CREATE TABLE IF NOT EXISTS qtime (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "jobid INTEGER NOT NULL, time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN "
@@ -40,34 +40,31 @@ const std::string db_initialise(
     "etime FROM jobs LEFT JOIN qtime ON jobs.id=qtime.jobid LEFT JOIN stime ON "
     "jobs.id=stime.jobid LEFT JOIN etime ON jobs.id=etime.jobid;"
     // Create used_slots view
-    "CREATE VIEW IF NOT EXISTS used_slots AS SELECT IFNULL(SUM(slots),0) FROM "
-    "job_times WHERE stime IS NOT NULL AND etime IS NULL;"
+    "CREATE VIEW IF NOT EXISTS used_slots AS SELECT IFNULL(SUM(slots),0) as s "
+    "FROM job_times WHERE stime IS NOT NULL AND etime IS NULL;"
+    // Create sibling_pids view
+    "CREATE VIEW IF NOT EXISTS sibling_pids AS SELECT pid FROM jobs WHERE id "
+    "IN ( SELECT id FROM job_times WHERE stime IS NOT NULL and etime IS NULL);"
     // Clean old entries
 );
 const std::string clean_jobs("DELETE * FROM jobs;");
 class Status_Manager {
 public:
   const std::string jobid;
-  std::ofstream stat_file;
   Status_Manager();
   ~Status_Manager();
   void add_cmd(Run_cmd cmd, std::string category, uint32_t slots);
   void job_start();
   void job_end(int exit_stat);
   void save_output(const std::pair<std::string, std::string> &in);
+  std::vector<pid_t> get_running_job_pids();
   bool allowed_to_run();
-  bool started;
 
 private:
-  std::string
-  time_writer(std::chrono::time_point<std::chrono::system_clock> in);
+  sqlite3 *conn_;
+  uint32_t slots_req_;
+  const uint32_t total_slots_;
   std::string gen_jobid();
-  sqlite3 *conn;
   static int slots_callback(void *ignore2, int ncols, char **out, char **cols);
-  char *sqlite_err;
-  int sqlite_ret;
-  uint32_t slots_req;
-  uint32_t slots_used;
-  const uint32_t total_slots;
 };
 } // namespace tsp

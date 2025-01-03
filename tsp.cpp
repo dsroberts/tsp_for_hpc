@@ -18,7 +18,6 @@
 constexpr std::chrono::milliseconds base_wait_period{2000};
 
 int main(int argc, char *argv[]) {
-  auto stat = tsp::Status_Manager{};
   auto category = std::string{};
   uint32_t nslots{1};
   bool disappear_output{false};
@@ -48,12 +47,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  auto jitter = tsp::Jitter{tsp::jitter_ms};
-  std::this_thread::sleep_for(tsp::jitter_ms + jitter.get());
-
-  auto cmd = tsp::Run_cmd{argv, optind, argc};
-  stat.add_cmd(cmd, category, nslots);
-
   if (do_fork) {
     pid_t main_fork_pid;
     main_fork_pid = fork();
@@ -66,7 +59,14 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  auto binder = tsp::Proc_affinity{nslots, getpid()};
+  auto stat = tsp::Status_Manager{};
+  auto cmd = tsp::Run_cmd{argv, optind, argc};
+  stat.add_cmd(cmd, category, nslots);
+
+  auto jitter = tsp::Jitter{tsp::jitter_ms};
+  std::this_thread::sleep_for(tsp::jitter_ms + jitter.get());
+
+  auto binder = tsp::Proc_affinity{stat, nslots, getpid()};
   std::vector<uint32_t> bound_cores;
   {
     auto locker = tsp::Locker();
@@ -75,7 +75,6 @@ int main(int argc, char *argv[]) {
       if (stat.allowed_to_run()) {
         break;
       }
-      locker.unlock();
       std::this_thread::sleep_for(base_wait_period + jitter.get());
     }
     stat.job_start();
@@ -104,9 +103,9 @@ int main(int argc, char *argv[]) {
         setenv("OMPI_MCA_rmaps_rank_file_physical", "true", 1);
       }
       handler.init_pipes();
-      ret = execvp(cmd.proc_to_run[0], cmd.proc_to_run.data());
+      ret = execvp(cmd.get_argv_0(), cmd.get_argv());
       if (ret != 0) {
-        die_with_err("Error: could not exec " + std::string(cmd.proc_to_run[0]),
+        die_with_err("Error: could not exec " + std::string(cmd.get_argv_0()),
                      ret);
       }
     }
