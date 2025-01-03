@@ -19,17 +19,16 @@ const std::string db_initialise(
     "uuid TEXT, command TEXT, category TEXT, pid INTEGER, slots INTEGER);"
     // Create queue time table
     "CREATE TABLE IF NOT EXISTS qtime (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-    "jobid INTEGER NOT NULL, time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN "
-    "KEY(jobid) REFERENCES jobs(id) ON DELETE CASCADE);"
+    "jobid INTEGER NOT NULL, time INTEGER, FOREIGN KEY(jobid) REFERENCES "
+    "jobs(id) ON DELETE CASCADE);"
     // Create start time table
     "CREATE TABLE IF NOT EXISTS stime (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-    "jobid INTEGER NOT NULL, time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN "
-    "KEY(jobid) REFERENCES jobs(id) ON DELETE CASCADE);"
+    "jobid INTEGER NOT NULL, time INTEGER, FOREIGN KEY(jobid) REFERENCES "
+    "jobs(id) ON DELETE CASCADE);"
     // Create end time table
-    "CREATE TABLE IF NOT EXISTS etime (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-    "jobid INTEGER NOT NULL, exit_status INTEGER, time TIMESTAMP DEFAULT "
-    "CURRENT_TIMESTAMP, FOREIGN KEY(jobid) REFERENCES jobs(id) ON DELETE "
-    "CASCADE);"
+    "CREATE TABLE IF NOT EXISTS etime (id INTEGER PRIMARY KEY AUTOINCREMENT,  "
+    "jobid INTEGER NOT NULL, exit_status INTEGER, time INTEGER, FOREIGN "
+    "KEY(jobid) REFERENCES jobs(id) ON DELETE CASCADE);"
     // Create stdout/stderr table
     "CREATE TABLE IF NOT EXISTS job_output ( jobid INTEGER UNIQUE NOT NULL, "
     "stdout TEXT, stderr TEXT, FOREIGN KEY(jobid) REFERENCES jobs(id) ON "
@@ -65,5 +64,6 @@ private:
   uint32_t slots_req_;
   const uint32_t total_slots_;
   std::string gen_jobid();
+  inline static std::string now_str();
 };
 } // namespace tsp
