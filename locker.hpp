@@ -14,5 +14,6 @@ public:
 
 private:
   const std::string lock_file_path_{get_tmp() / ".affinity_lock_file.lock"};
+  int lockfile_fd_;
 };
 } // namespace tsp

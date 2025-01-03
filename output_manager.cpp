@@ -41,7 +41,7 @@ std::pair<std::string, std::string> Output_handler::get_output() {
   std::stringstream ss_out{};
   ss_out << stdout_stream.rdbuf();
   stdout_stream.close();
-  //std::filesystem::remove(stdout_fn);
+  std::filesystem::remove(stdout_fn_);
   out_bufs_.first = ss_out.str();
 
   std::ifstream stderr_stream(stderr_fn_);

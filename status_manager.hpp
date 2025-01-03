@@ -47,7 +47,7 @@ const std::string db_initialise(
     "IN ( SELECT id FROM job_times WHERE stime IS NOT NULL and etime IS NULL);"
     // Clean old entries
 );
-const std::string clean_jobs("DELETE * FROM jobs;");
+const std::string clean_jobs("DELETE FROM jobs;");
 class Status_Manager {
 public:
   const std::string jobid;
@@ -65,6 +65,5 @@ private:
   uint32_t slots_req_;
   const uint32_t total_slots_;
   std::string gen_jobid();
-  static int slots_callback(void *ignore2, int ncols, char **out, char **cols);
 };
 } // namespace tsp
