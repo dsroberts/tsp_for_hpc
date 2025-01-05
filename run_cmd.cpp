@@ -47,7 +47,12 @@ char **Run_cmd::get_argv() {
                         malloc((proc_to_run_.size() + 1) * sizeof(char *))))) {
       die_with_err_errno("Malloc failed", -1);
     }
+#ifdef DUMB_COMPILER
+    for ( auto i = 0ul; i < proc_to_run_.size(); ++i ) {
+      auto &p = proc_to_run_[i];
+#else
     for (const auto &[i, p] : std::views::enumerate(proc_to_run_)) {
+#endif
       argv_holder_[i] = p.data();
     }
     argv_holder_[proc_to_run_.size()] = nullptr;
