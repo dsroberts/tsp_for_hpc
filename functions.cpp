@@ -57,10 +57,11 @@ std::vector<uint32_t> parse_cpuset_range(std::string in) {
 
 std::vector<uint32_t> get_cgroup() {
   static std::string cgroup_fn("/proc/self/cgroup");
-  static std::string cgroup_cpuset_path_prefix("/sys/fs/cgroup/cpuset");
 #ifdef CRAY
+  static std::string cgroup_cpuset_path_prefix("/sys/fs/cgroup");
   static std::string cpuset_filename("/cpuset.cpus.effective");
 #else
+  static std::string cgroup_cpuset_path_prefix("/sys/fs/cgroup/cpuset");
   static std::string cpuset_filename("/cpuset.cpus");
 #endif
   if (!std::filesystem::exists(cgroup_fn)) {
@@ -90,6 +91,8 @@ std::vector<uint32_t> get_cgroup() {
   }
   // First pattern didn't work, maybe we'll have more luck if we look for
   // a blank middle segment
+  cgroup_file.clear();
+  cgroup_file.seekg(0, std::ios::beg);
   if (cpuset_path.empty()) {
     while (std::getline(cgroup_file, line)) {
       std::string segment;
