@@ -58,7 +58,11 @@ std::vector<uint32_t> parse_cpuset_range(std::string in) {
 std::vector<uint32_t> get_cgroup() {
   static std::string cgroup_fn("/proc/self/cgroup");
   static std::string cgroup_cpuset_path_prefix("/sys/fs/cgroup/cpuset");
+#ifdef CRAY
+  static std::string cpuset_filename("/cpuset.cpus.effective");
+#else
   static std::string cpuset_filename("/cpuset.cpus");
+#endif
   if (!std::filesystem::exists(cgroup_fn)) {
     throw std::runtime_error("Cgroup file for current process not found");
   }
@@ -68,25 +72,39 @@ std::vector<uint32_t> get_cgroup() {
   std::ifstream cgroup_file(cgroup_fn);
   if (cgroup_file.is_open()) {
     while (std::getline(cgroup_file, line)) {
-      std::vector<std::string> seglist;
+      // std::vector<std::string> seglist;
       std::string segment;
       std::stringstream ss(line);
-      while (std::getline(ss, segment, ':')) {
-        seglist.push_back(segment);
-      };
-      if (seglist[1] == "cpuset") {
+      std::getline(ss, segment, ':');
+      std::getline(ss, segment, ':');
+      if (segment == "cpuset") {
+        std::getline(ss, segment, ':');
         cpuset_path = cgroup_cpuset_path_prefix;
-        cpuset_path += seglist[2];
+        cpuset_path += segment;
         cpuset_path += cpuset_filename;
-      }
-      if (!cpuset_path.empty()) {
         break;
       }
     }
-    cgroup_file.close();
   } else {
     throw std::runtime_error("Unable to open cgroup file " + cgroup_fn);
   }
+  // First pattern didn't work, maybe we'll have more luck if we look for
+  // a blank middle segment
+  if (cpuset_path.empty()) {
+    while (std::getline(cgroup_file, line)) {
+      std::string segment;
+      std::stringstream ss(line);
+      std::getline(ss, segment, ':');
+      std::getline(ss, segment, ':');
+      if (segment.empty()) {
+        std::getline(ss, segment, ':');
+        cpuset_path = cgroup_cpuset_path_prefix;
+        cpuset_path += segment;
+        cpuset_path += cpuset_filename;
+      }
+    }
+  }
+  cgroup_file.close();
   // read cpuset file
   std::ifstream cpuset_file(cpuset_path);
   if (cpuset_file.is_open()) {
