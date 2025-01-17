@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "config.hpp"
 #include "functions.hpp"
 #include "jitter.hpp"
 #include "locker.hpp"
@@ -18,36 +19,16 @@
 constexpr std::chrono::milliseconds base_wait_period{2000};
 
 int main(int argc, char *argv[]) {
-  auto category = std::string{};
-  uint32_t nslots{1};
-  bool disappear_output{false};
-  bool do_fork{true};
-  bool separate_stderr{false};
 
-  // Parse args: only take the ones we use for now
-  int c;
-  while ((c = getopt(argc, argv, "+nfL:N:E")) != -1) {
-    switch (c) {
-    case 'n':
-      // Pipe stdout and stderr of forked process to /dev/null
-      disappear_output = true;
-      break;
-    case 'f':
-      do_fork = false;
-      break;
-    case 'N':
-      nslots = std::stoul(optarg);
-      break;
-    case 'E':
-      separate_stderr = true;
-      break;
-    case 'L':
-      category = std::string{optarg};
-      break;
-    }
+  auto config = tsp::Config(argc, argv);
+
+  if (optind == argc) {
+    std::cerr << std::format(tsp::help,argv[0]) << std::endl;
+    die_with_err("ERROR! Requested to run a command, but no command specified",
+                 -1);
   }
 
-  if (do_fork) {
+  if (config.get_bool("do_fork")) {
     pid_t main_fork_pid;
     main_fork_pid = fork();
     if (main_fork_pid == -1) {
@@ -61,12 +42,12 @@ int main(int argc, char *argv[]) {
 
   auto stat = tsp::Status_Manager{};
   auto cmd = tsp::Run_cmd{argv, optind, argc};
-  stat.add_cmd(cmd, category, nslots);
+  stat.add_cmd(cmd, config.get_string("category"), config.get_int("nslots"));
 
   auto jitter = tsp::Jitter{tsp::jitter_ms};
   std::this_thread::sleep_for(tsp::jitter_ms + jitter.get());
 
-  auto binder = tsp::Proc_affinity{stat, nslots, getpid()};
+  auto binder = tsp::Proc_affinity{stat, config.get_int("nslots"), getpid()};
   std::vector<uint32_t> bound_cores;
   {
     auto locker = tsp::Locker();
@@ -82,7 +63,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (cmd.is_openmpi) {
-    cmd.add_rankfile(bound_cores, nslots);
+    cmd.add_rankfile(bound_cores, config.get_int("nslots"));
   }
 
   pid_t fork_pid;
@@ -95,7 +76,8 @@ int main(int argc, char *argv[]) {
     int child_stat;
     int ret;
     pid_t waited_on_pid;
-    auto handler = tsp::Output_handler(disappear_output, separate_stderr,
+    auto handler = tsp::Output_handler(config.get_bool("disappear_output"),
+                                       config.get_bool("separate_stderr"),
                                        stat.jobid, true);
     if (0 == (waited_on_pid = fork())) {
       if (cmd.is_openmpi) {

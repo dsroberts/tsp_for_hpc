@@ -14,33 +14,36 @@
 
 namespace tsp {
 
-Status_Manager::Status_Manager()
-    : jobid(gen_jobid()), total_slots_(get_cgroup().size()) {
-  auto stat_fn = std::filesystem::temp_directory_path() / db_name;
+Status_Manager::Status_Manager(bool rw)
+    : jobid(rw ? gen_jobid() : ""), total_slots_(rw ? get_cgroup().size() : 0) {
+  auto stat_fn = get_tmp() / db_name;
   int sqlite_ret;
   if ((sqlite_ret = sqlite3_open_v2(stat_fn.c_str(), &conn_,
                                     SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
                                         SQLITE_OPEN_FULLMUTEX,
                                     nullptr)) != SQLITE_OK) {
-    throw std::runtime_error("Unable to open database");
+    die_with_err("Unable to open database", sqlite_ret);
   }
   // Wait a long time if we have to
   if ((sqlite_ret = sqlite3_busy_timeout(conn_, 10000)) != SQLITE_OK) {
-    throw std::runtime_error(std::string("Unable to set busy timeout :"));
+    die_with_err("Unable to set busy timeout", sqlite_ret);
   }
-  char *sqlite_err;
-  if ((sqlite_ret = sqlite3_exec(conn_, db_initialise.c_str(), nullptr, nullptr,
-                                 &sqlite_err)) != SQLITE_OK) {
-    throw std::runtime_error(std::string("Error initialising database :") +
-                             sqlite_err);
+  if (rw) {
+    char *sqlite_err;
+    if ((sqlite_ret = sqlite3_exec(conn_, db_initialise.data(), nullptr,
+                                   nullptr, &sqlite_err)) != SQLITE_OK) {
+      die_with_err(std::string("Error initialising database :") + sqlite_err,
+                   sqlite_ret);
+    }
   }
 }
+Status_Manager::Status_Manager() : Status_Manager(true) {};
 Status_Manager::~Status_Manager() { sqlite3_close_v2(conn_); }
 
-inline std::string Status_Manager::now_str() {
-  return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
-                            std::chrono::system_clock::now().time_since_epoch())
-                            .count());
+int64_t Status_Manager::now() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
 }
 
 void Status_Manager::add_cmd(Run_cmd cmd, std::string category,
@@ -82,12 +85,13 @@ void Status_Manager::add_cmd(Run_cmd cmd, std::string category,
   }
 
   char *sqlite_err;
-  if ((sqlite_ret = sqlite3_exec(
-           conn_,
-           std::string("INSERT INTO qtime(jobid,time) SELECT id, " + now_str() +
-                       " FROM jobs WHERE uuid = \"" + jobid + "\"; ")
-               .c_str(),
-           nullptr, nullptr, &sqlite_err)) != SQLITE_OK) {
+  if ((sqlite_ret =
+           sqlite3_exec(conn_,
+                        std::format("INSERT INTO qtime(jobid,time) SELECT "
+                                    "id,{} FROM jobs WHERE uuid = \"{}\";",
+                                    now(), jobid)
+                            .c_str(),
+                        nullptr, nullptr, &sqlite_err)) != SQLITE_OK) {
     die_with_err("Unable to prepare new jobid statement", sqlite_ret);
   }
 }
@@ -137,12 +141,13 @@ std::vector<pid_t> Status_Manager::get_running_job_pids() {
 void Status_Manager::job_start() {
   int sqlite_ret;
   char *sqlite_err;
-  if ((sqlite_ret = sqlite3_exec(
-           conn_,
-           std::string("INSERT INTO stime(jobid,time) SELECT id," + now_str() +
-                       " FROM jobs WHERE uuid = \"" + jobid + "\";")
-               .c_str(),
-           nullptr, nullptr, &sqlite_err)) != SQLITE_OK) {
+  if ((sqlite_ret =
+           sqlite3_exec(conn_,
+                        std::format("INSERT INTO stime(jobid,time) SELECT "
+                                    "id,{} FROM jobs WHERE uuid = \"{}\";",
+                                    now(), jobid)
+                            .c_str(),
+                        nullptr, nullptr, &sqlite_err)) != SQLITE_OK) {
     throw std::runtime_error(
         std::string("Unable to insert stime into database: ") + sqlite_err);
   }
@@ -153,9 +158,9 @@ void Status_Manager::job_end(int exit_stat) {
   char *sqlite_err;
   if ((sqlite_ret = sqlite3_exec(
            conn_,
-           std::string("INSERT INTO etime(jobid,exit_status,time) SELECT id," +
-                       std::to_string(exit_stat) + "," + now_str() +
-                       " FROM jobs WHERE uuid = \"" + jobid + "\";")
+           std::format("INSERT INTO etime(jobid,exit_status,time) SELECT "
+                       "id,{},{} FROM jobs WHERE uuid= \"{}\";",
+                       exit_stat, now(), jobid)
                .c_str(),
            nullptr, nullptr, &sqlite_err)) != SQLITE_OK) {
     throw std::runtime_error(
@@ -192,6 +197,67 @@ void Status_Manager::save_output(
   if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
     die_with_err("Unable finalize statement", sqlite_ret);
   }
+}
+
+/*
+Read-only functions
+*/
+uint32_t Status_Manager::get_last_job_id() {
+
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+  if ((sqlite_ret = sqlite3_prepare_v2(conn_, get_last_jobid_stmt.data(), -1,
+                                       &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get jobid statement", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
+    die_with_err("Unable get latest jobid", sqlite_ret);
+  }
+  auto out = static_cast<uint32_t>(sqlite3_column_int(stmt, 0));
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+  return out;
+}
+
+job_stat Status_Manager::get_job_by_id(uint32_t id) {
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+
+  if ((sqlite_ret = sqlite3_prepare_v2(
+                        conn_, std::format(get_job_by_id_stmt, id).c_str(), -1,
+                        &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get jobid statement", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
+    die_with_err("Unable get latest jobid", sqlite_ret);
+  }
+  job_stat out;
+  out.id = static_cast<uint32_t>(sqlite3_column_int(stmt, 0));
+  out.cmd =
+      std::string{reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1))};
+  auto tmp = sqlite3_column_text(stmt, 2);
+  if (!!tmp) {
+    out.category.emplace(reinterpret_cast<const char *>(tmp));
+  }
+  out.qtime = static_cast<uint64_t>(sqlite3_column_int64(stmt, 3));
+  tmp = sqlite3_column_text(stmt, 4);
+  if (!!tmp) {
+    out.stime.emplace(sqlite3_column_int64(stmt, 4));
+  }
+  tmp = sqlite3_column_text(stmt, 5);
+  if (!!tmp) {
+    out.etime.emplace(sqlite3_column_int64(stmt, 5));
+  }
+  tmp = sqlite3_column_text(stmt, 6);
+  if (!!tmp) {
+    out.status.emplace(sqlite3_column_int(stmt, 6));
+  }
+
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+  return out;
 }
 
 std::string Status_Manager::gen_jobid() {

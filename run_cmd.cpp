@@ -48,7 +48,7 @@ char **Run_cmd::get_argv() {
       die_with_err_errno("Malloc failed", -1);
     }
 #ifdef DUMB_COMPILER
-    for ( auto i = 0ul; i < proc_to_run_.size(); ++i ) {
+    for (auto i = 0ul; i < proc_to_run_.size(); ++i) {
       auto &p = proc_to_run_[i];
 #else
     for (const auto &[i, p] : std::views::enumerate(proc_to_run_)) {

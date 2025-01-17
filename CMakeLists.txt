@@ -10,11 +10,13 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
 set(sources
+    config.cpp
     locker.cpp
     functions.cpp
     jitter.cpp
     run_cmd.cpp
     status_manager.cpp
+    status_writing.cpp
     output_manager.cpp
     proc_affinity.cpp
     tsp.cpp)

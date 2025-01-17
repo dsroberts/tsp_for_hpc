@@ -5,6 +5,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <numeric>
 #include <sstream>
 #include <string>
@@ -24,15 +25,15 @@ const std::filesystem::path get_tmp() {
 };
 
 void die_with_err(std::string msg, int status) {
-  throw std::runtime_error(msg + "stat=" + std::to_string(status));
+  std::cerr << msg << std::endl;
+  std::cerr << "stat=" << status << std::endl;
+  std::exit(EXIT_FAILURE);
 };
 
 void die_with_err_errno(std::string msg, int status) {
-  std::string out(msg);
-  out.append("\nstat=" + std::to_string(status) +
-             ", errno=" + std::to_string(errno));
-  out.append(std::string("\n") + strerror(errno));
-  throw std::runtime_error(out);
+  std::cerr << msg << std::endl;
+  std::cerr << "stat=" << status << ", errno=" << errno << std::endl;
+  std::cerr << strerror(errno) << std::endl;
 };
 
 std::vector<uint32_t> parse_cpuset_range(std::string in) {
