@@ -119,3 +119,9 @@ std::vector<uint32_t> get_cgroup() {
                              cpuset_path.string());
   }
 };
+
+int64_t now() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}

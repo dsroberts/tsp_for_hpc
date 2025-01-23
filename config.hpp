@@ -32,11 +32,18 @@ constexpr std::string_view help{
     "  -L, --label=LABEL      Add a label to the task to facilitate simpler "
     "querying\n\n"
     "Job Querying Options:\n"
-    "  -l, --list-jobs        Show the job list (default action)\n"
+    "  -l, --list             Show the job list (default action)\n"
+    "      --list-failed      Show the list of failed jobs\n"
+    "  -i, --info=[ID]        Show detailed info for job [ID] (latest if ID is "
+    "omitted)\n"
+    "  -o, --stdout=[ID]      Display the output of the job [ID] (latest if ID \n"
+    "                         is omitted)\n"
+    "  -e, --stderr=[ID]      If -E was provided, display the error file of \n"
+    "                         the job [ID] (latest if ID is omitted)\n"
     "      --db-path          Output the path to the database\n"
     "      --gh-summary       Output summary info for github actions\n\n"
     "Other Options:\n"
-    "      --help    display this help and exit\n"};
+    "  -h, --help    display this help and exit\n"};
 class Config {
 public:
   Config(int argc, char *argv[]);

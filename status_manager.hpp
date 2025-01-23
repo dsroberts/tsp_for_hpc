@@ -43,10 +43,10 @@ constexpr std::string_view db_initialise(
     "LEFT JOIN etime ON jobs.id=etime.jobid;"
     // Create used_slots view
     "CREATE VIEW IF NOT EXISTS used_slots AS SELECT IFNULL(SUM(slots),0) as s "
-    "FROM job_times WHERE stime IS NOT NULL AND etime IS NULL;"
+    "FROM job_details WHERE stime IS NOT NULL AND etime IS NULL;"
     // Create sibling_pids view
     "CREATE VIEW IF NOT EXISTS sibling_pids AS SELECT pid FROM jobs WHERE id "
-    "IN ( SELECT id FROM job_times WHERE stime IS NOT NULL and etime IS "
+    "IN ( SELECT id FROM job_details WHERE stime IS NOT NULL and etime IS "
     "NULL);\0");
 
 // Clean old entries
@@ -66,13 +66,28 @@ constexpr std::string_view get_job_by_id_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
     "FROM job_details WHERE id = {};");
 
+constexpr std::string_view get_all_jobs_stmt(
+    "SELECT id,command,category,qtime,stime,etime,exit_status "
+    "FROM job_details\0");
+
+constexpr std::string_view get_failed_jobs_stmt(
+    "SELECT id,command,category,qtime,stime,etime,exit_status "
+    "FROM job_details WHERE exit_status IS NOT NULL AND exit_status != 0\0");
+
+constexpr std::string_view get_job_details_by_id_stmt(
+    "SELECT id,command,category,qtime,stime,etime,exit_status,uuid,slots,pid "
+    "FROM job_details WHERE id = {};");
+
+constexpr std::string_view
+    get_job_output_stmt("SELECT {} FROM job_output WHERE jobid = {};");
+
 struct job_stat {
   uint32_t id;
   std::string cmd;
   std::optional<std::string> category;
-  uint64_t qtime;
-  std::optional<uint64_t> stime;
-  std::optional<uint64_t> etime;
+  int64_t qtime;
+  std::optional<int64_t> stime;
+  std::optional<int64_t> etime;
   std::optional<int32_t> status;
 };
 
@@ -80,7 +95,7 @@ struct job_details {
   job_stat stat;
   std::string uuid;
   uint32_t slots;
-  uint32_t pid;
+  std::optional<uint32_t> pid;
 };
 
 class Status_Manager {
@@ -99,14 +114,14 @@ public:
   job_stat get_job_by_id(uint32_t id);
   job_details get_job_details_by_id(uint32_t id);
   std::vector<job_stat> get_all_job_stats();
-  std::string_view get_job_stdout(job_stat job);
-  std::string_view get_job_stderr(job_stat job);
+  std::vector<job_stat> get_failed_job_stats();
+  std::string get_job_stdout(uint32_t id);
+  std::string get_job_stderr(uint32_t id);
 
 private:
   sqlite3 *conn_;
   uint32_t slots_req_;
   const uint32_t total_slots_;
   std::string gen_jobid();
-  inline static int64_t now();
 };
 } // namespace tsp

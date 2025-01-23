@@ -10,6 +10,7 @@ enum class Action {
   stderr,
   info,
   github_summary,
+  list_failed,
 };
 
 void do_action(Action a);

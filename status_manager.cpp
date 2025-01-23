@@ -40,12 +40,6 @@ Status_Manager::Status_Manager(bool rw)
 Status_Manager::Status_Manager() : Status_Manager(true) {};
 Status_Manager::~Status_Manager() { sqlite3_close_v2(conn_); }
 
-int64_t Status_Manager::now() {
-  return std::chrono::duration_cast<std::chrono::microseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
-
 void Status_Manager::add_cmd(Run_cmd cmd, std::string category,
                              uint32_t nslots) {
   slots_req_ = nslots;
@@ -230,17 +224,17 @@ job_stat Status_Manager::get_job_by_id(uint32_t id) {
     die_with_err("Unable to prepare get jobid statement", sqlite_ret);
   }
   if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
-    die_with_err("Unable get latest jobid", sqlite_ret);
+    die_with_err("Unable get job stats", sqlite_ret);
   }
   job_stat out;
   out.id = static_cast<uint32_t>(sqlite3_column_int(stmt, 0));
   out.cmd =
       std::string{reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1))};
   auto tmp = sqlite3_column_text(stmt, 2);
-  if (!!tmp) {
+  if (tmp[0] != '\0') {
     out.category.emplace(reinterpret_cast<const char *>(tmp));
   }
-  out.qtime = static_cast<uint64_t>(sqlite3_column_int64(stmt, 3));
+  out.qtime = sqlite3_column_int64(stmt, 3);
   tmp = sqlite3_column_text(stmt, 4);
   if (!!tmp) {
     out.stime.emplace(sqlite3_column_int64(stmt, 4));
@@ -253,12 +247,180 @@ job_stat Status_Manager::get_job_by_id(uint32_t id) {
   if (!!tmp) {
     out.status.emplace(sqlite3_column_int(stmt, 6));
   }
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+
+  return out;
+}
+
+std::vector<job_stat> Status_Manager::get_all_job_stats() {
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+
+  if ((sqlite_ret = sqlite3_prepare_v2(conn_, get_all_jobs_stmt.data(), -1,
+                                       &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get jobid statement", sqlite_ret);
+  }
+  std::vector<job_stat> out;
+  while ((sqlite_ret = sqlite3_step(stmt)) == SQLITE_ROW) {
+    job_stat tmp_stat;
+    tmp_stat.id = static_cast<uint32_t>(sqlite3_column_int(stmt, 0));
+    tmp_stat.cmd = std::string{
+        reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1))};
+    auto tmp = sqlite3_column_text(stmt, 2);
+    if (tmp[0] != '\0') {
+      tmp_stat.category.emplace(reinterpret_cast<const char *>(tmp));
+    }
+    tmp_stat.qtime = sqlite3_column_int64(stmt, 3);
+    tmp = sqlite3_column_text(stmt, 4);
+    if (!!tmp) {
+      tmp_stat.stime.emplace(sqlite3_column_int64(stmt, 4));
+    }
+    tmp = sqlite3_column_text(stmt, 5);
+    if (!!tmp) {
+      tmp_stat.etime.emplace(sqlite3_column_int64(stmt, 5));
+    }
+    tmp = sqlite3_column_text(stmt, 6);
+    if (!!tmp) {
+      tmp_stat.status.emplace(sqlite3_column_int(stmt, 6));
+    }
+    out.push_back(tmp_stat);
+  }
+  if (sqlite_ret != SQLITE_DONE) {
+    die_with_err("Error retrieving job statuses", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+  return out;
+}
+
+std::vector<job_stat> Status_Manager::get_failed_job_stats() {
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+
+  if ((sqlite_ret = sqlite3_prepare_v2(conn_, get_failed_jobs_stmt.data(), -1,
+                                       &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get jobid statement", sqlite_ret);
+  }
+  std::vector<job_stat> out;
+  while ((sqlite_ret = sqlite3_step(stmt)) == SQLITE_ROW) {
+    job_stat tmp_stat;
+    tmp_stat.id = static_cast<uint32_t>(sqlite3_column_int(stmt, 0));
+    tmp_stat.cmd = std::string{
+        reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1))};
+    auto tmp = sqlite3_column_text(stmt, 2);
+    if (tmp[0] != '\0') {
+      tmp_stat.category.emplace(reinterpret_cast<const char *>(tmp));
+    }
+    tmp_stat.qtime = sqlite3_column_int64(stmt, 3);
+    tmp = sqlite3_column_text(stmt, 4);
+    if (!!tmp) {
+      tmp_stat.stime.emplace(sqlite3_column_int64(stmt, 4));
+    }
+    tmp = sqlite3_column_text(stmt, 5);
+    if (!!tmp) {
+      tmp_stat.etime.emplace(sqlite3_column_int64(stmt, 5));
+    }
+    tmp = sqlite3_column_text(stmt, 6);
+    if (!!tmp) {
+      tmp_stat.status.emplace(sqlite3_column_int(stmt, 6));
+    }
+    out.push_back(tmp_stat);
+  }
+  if (sqlite_ret != SQLITE_DONE) {
+    die_with_err("Error retrieving job statuses", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+  return out;
+}
+
+job_details Status_Manager::get_job_details_by_id(uint32_t id) {
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+
+  if ((sqlite_ret =
+           sqlite3_prepare_v2(
+               conn_, std::format(get_job_details_by_id_stmt, id).c_str(), -1,
+               &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get jobid statement", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
+    die_with_err("Unable get job detail data", sqlite_ret);
+  }
+  job_details out;
+  out.stat.id = static_cast<uint32_t>(sqlite3_column_int(stmt, 0));
+  out.stat.cmd =
+      std::string{reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1))};
+  auto tmp = sqlite3_column_text(stmt, 2);
+  if (tmp[0] != '\0') {
+    out.stat.category.emplace(reinterpret_cast<const char *>(tmp));
+  }
+  out.stat.qtime = sqlite3_column_int64(stmt, 3);
+  tmp = sqlite3_column_text(stmt, 4);
+  if (!!tmp) {
+    out.stat.stime.emplace(sqlite3_column_int64(stmt, 4));
+  }
+  tmp = sqlite3_column_text(stmt, 5);
+  if (!!tmp) {
+    out.stat.etime.emplace(sqlite3_column_int64(stmt, 5));
+  }
+  tmp = sqlite3_column_text(stmt, 6);
+  if (!!tmp) {
+    out.stat.status.emplace(sqlite3_column_int(stmt, 6));
+  }
+  out.uuid =
+      std::string{reinterpret_cast<const char *>(sqlite3_column_text(stmt, 7))};
+  out.slots = static_cast<uint32_t>(sqlite3_column_int(stmt, 8));
+  out.pid.emplace(sqlite3_column_int(stmt, 9));
 
   if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
     die_with_err("Unable finalize statement", sqlite_ret);
   }
   return out;
 }
+
+std::string Status_Manager::get_job_stdout(uint32_t id) {
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+  if ((sqlite_ret =
+           sqlite3_prepare_v2(
+               conn_, std::format(get_job_output_stmt, "stdout", id).c_str(),
+               -1, &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get job output statement", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
+    die_with_err("Unable get job stdout data", sqlite_ret);
+  }
+  auto out =
+      std::string{reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0))};
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+  return out;
+};
+std::string Status_Manager::get_job_stderr(uint32_t id) {
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+  if ((sqlite_ret =
+           sqlite3_prepare_v2(
+               conn_, std::format(get_job_output_stmt, "stderr", id).c_str(),
+               -1, &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get job output statement", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
+    die_with_err("Unable get job stdout data", sqlite_ret);
+  }
+  auto out =
+      std::string{reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0))};
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+  return out;
+};
 
 std::string Status_Manager::gen_jobid() {
   // https://stackoverflow.com/questions/24365331/how-can-i-generate-uuid-in-c-without-using-boost-library

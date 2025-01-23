@@ -11,3 +11,4 @@ void die_with_err(std::string msg, int status);
 void die_with_err_errno(std::string msg, int status);
 std::vector<uint32_t> parse_cpuset_range(std::string in);
 std::vector<uint32_t> get_cgroup();
+int64_t now();
