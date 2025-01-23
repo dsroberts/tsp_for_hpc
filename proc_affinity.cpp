@@ -10,9 +10,7 @@
 namespace tsp {
 
 Proc_affinity::Proc_affinity(Status_Manager &sm, uint32_t nslots, pid_t pid)
-    : sm_(sm), nslots_(nslots), pid_(pid),
-      my_path_(std::filesystem::read_symlink("/proc/self/exe")),
-      cpuset_from_cgroup_(get_cgroup()) {
+    : sm_(sm), nslots_(nslots), pid_(pid), cpuset_from_cgroup_(get_cgroup()) {
   // Open cgroups file
   if (nslots > cpuset_from_cgroup_.size()) {
     die_with_err("More slots requested than available on the system, this "
@@ -26,7 +24,7 @@ std::vector<uint32_t> Proc_affinity::bind() {
   auto sibling_pids = get_siblings();
   std::vector<uint32_t> siblings_affinity;
   std::vector<uint32_t> out;
-  for (auto i : sibling_pids) {
+  for (const auto &i : sibling_pids) {
     auto tmp = get_sibling_affinity(i);
     siblings_affinity.insert(siblings_affinity.end(), tmp.begin(), tmp.end());
   }
@@ -47,16 +45,7 @@ std::vector<uint32_t> Proc_affinity::bind() {
 }
 
 std::vector<pid_t> Proc_affinity::get_siblings() {
-  auto all_tsp_pids = sm_.get_running_job_pids();
-  for (std::vector<pid_t>::iterator it = all_tsp_pids.begin();
-       it != all_tsp_pids.end();) {
-    if (*it == pid_) {
-      all_tsp_pids.erase(it);
-    } else {
-      it++;
-    }
-  }
-  return all_tsp_pids;
+  return sm_.get_running_job_pids(pid_);
 };
 
 std::vector<uint32_t> Proc_affinity::get_sibling_affinity(pid_t pid) {

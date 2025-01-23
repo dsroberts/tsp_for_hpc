@@ -23,14 +23,13 @@ int main(int argc, char *argv[]) {
   auto config = tsp::Config(argc, argv);
 
   if (optind == argc) {
-    std::cerr << std::format(tsp::help,argv[0]) << std::endl;
+    std::cerr << std::format(tsp::help, argv[0]) << std::endl;
     die_with_err("ERROR! Requested to run a command, but no command specified",
                  -1);
   }
 
   if (config.get_bool("do_fork")) {
-    pid_t main_fork_pid;
-    main_fork_pid = fork();
+    auto main_fork_pid = pid_t{fork()};
     if (main_fork_pid == -1) {
       die_with_err("Unable to fork when forking requested", main_fork_pid);
     }
@@ -56,6 +55,7 @@ int main(int argc, char *argv[]) {
       if (stat.allowed_to_run()) {
         break;
       }
+      locker.unlock();
       std::this_thread::sleep_for(base_wait_period + jitter.get());
     }
     stat.job_start();

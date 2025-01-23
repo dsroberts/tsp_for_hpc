@@ -20,7 +20,6 @@ private:
   Status_Manager &sm_;
   const uint32_t nslots_;
   const pid_t pid_;
-  const std::filesystem::path my_path_;
   const std::vector<uint32_t> cpuset_from_cgroup_;
   cpu_set_t mask_;
   std::vector<pid_t> get_siblings();

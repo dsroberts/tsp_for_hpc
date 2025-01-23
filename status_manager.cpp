@@ -111,12 +111,15 @@ bool Status_Manager::allowed_to_run() {
   return (total_slots_ - slots_used) >= slots_req_;
 }
 
-std::vector<pid_t> Status_Manager::get_running_job_pids() {
+std::vector<pid_t> Status_Manager::get_running_job_pids(pid_t excl) {
   sqlite3_stmt *stmt;
   int sqlite_ret;
   std::vector<pid_t> out;
-  if ((sqlite_ret = sqlite3_prepare_v2(conn_, "SELECT pid FROM sibling_pids;",
-                                       -1, &stmt, nullptr)) != SQLITE_OK) {
+  if ((sqlite_ret = sqlite3_prepare_v2(
+           conn_,
+           std::format("SELECT pid FROM sibling_pids WHERE pid != {};", excl)
+               .c_str(),
+           -1, &stmt, nullptr)) != SQLITE_OK) {
     die_with_err("Unable to prepare get pid statement", sqlite_ret);
   }
   while ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_DONE) {

@@ -108,7 +108,7 @@ bool Run_cmd::check_mpi(const char *exe_name) {
       }
       close(pipefd[0]);
       if (waitpid(fork_pid, nullptr, 0) == -1) {
-        throw std::runtime_error("Error watiting for mpirun test process");
+        throw std::runtime_error("Error waiting for mpirun test process");
       }
     }
     if (mpi_version_output.find("Open MPI") != std::string::npos ||

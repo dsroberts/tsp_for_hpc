@@ -6,6 +6,8 @@
 #include <optional>
 #include <sqlite3.h>
 #include <string>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "functions.hpp"
 #include "run_cmd.hpp"
@@ -108,7 +110,7 @@ public:
   void job_start();
   void job_end(int exit_stat);
   void save_output(const std::pair<std::string, std::string> &in);
-  std::vector<pid_t> get_running_job_pids();
+  std::vector<pid_t> get_running_job_pids(pid_t excl);
   bool allowed_to_run();
   uint32_t get_last_job_id();
   job_stat get_job_by_id(uint32_t id);
