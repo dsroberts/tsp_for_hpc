@@ -34,7 +34,8 @@ void print_job_stdout(Status_Manager sm_ro, uint32_t id) {
   if (details.stat.status) {
     std::cout << sm_ro.get_job_stdout(id);
   } else {
-    std::ifstream stream{get_tmp() / (out_file_template + details.uuid)};
+    std::ifstream stream{get_tmp() /
+                         (std::string(out_file_template) + details.uuid)};
     std::cout << stream.rdbuf();
   }
 };
@@ -43,7 +44,8 @@ void print_job_stderr(Status_Manager sm_ro, uint32_t id) {
   if (details.stat.status) {
     std::cout << sm_ro.get_job_stderr(id);
   } else {
-    std::ifstream stream{get_tmp() / (err_file_template + details.uuid)};
+    std::ifstream stream{get_tmp() /
+                         (std::string(err_file_template) + details.uuid)};
     std::cout << stream.rdbuf();
   }
 };

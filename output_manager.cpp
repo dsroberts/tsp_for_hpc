@@ -16,9 +16,9 @@
 namespace tsp {
 Output_handler::Output_handler(bool disappear, bool separate_stderr,
                                std::string jobid, bool rw)
-    : stdout_fn_{get_tmp() / (out_file_template + jobid)},
-      stderr_fn_{get_tmp() / (err_file_template + jobid)}, disappear_{disappear},
-      separate_stderr_{separate_stderr} {}
+    : stdout_fn_{get_tmp() / (std::string(out_file_template) + jobid)},
+      stderr_fn_{get_tmp() / (std::string(err_file_template) + jobid)},
+      disappear_{disappear}, separate_stderr_{separate_stderr} {}
 void Output_handler::init_pipes() {
   if (disappear_) {
     stdout_fd_ = open("/dev/null", O_WRONLY | O_CREAT, 0666);

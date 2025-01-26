@@ -22,10 +22,14 @@ int main(int argc, char *argv[]) {
 
   auto config = tsp::Config(argc, argv);
 
-  if (optind == argc) {
-    std::cerr << std::format(tsp::help, argv[0]) << std::endl;
-    die_with_err("ERROR! Requested to run a command, but no command specified",
-                 -1);
+  auto rerun = (config.get_int("rerun") >= 0);
+
+  if (!rerun) {
+    if (optind == argc) {
+      std::cerr << std::format(tsp::help, argv[0]) << std::endl;
+      die_with_err(
+          "ERROR! Requested to run a command, but no command specified", -1);
+    }
   }
 
   if (config.get_bool("do_fork")) {

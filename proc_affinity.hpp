@@ -13,12 +13,12 @@
 namespace tsp {
 class Proc_affinity {
 public:
-  Proc_affinity(Status_Manager &sm, uint32_t nslots, pid_t pid);
+  Proc_affinity(Status_Manager &sm, int32_t nslots, pid_t pid);
   std::vector<uint32_t> bind();
 
 private:
   Status_Manager &sm_;
-  const uint32_t nslots_;
+  const int32_t nslots_;
   const pid_t pid_;
   const std::vector<uint32_t> cpuset_from_cgroup_;
   cpu_set_t mask_;

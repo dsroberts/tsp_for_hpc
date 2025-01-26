@@ -9,10 +9,10 @@
 
 namespace tsp {
 
-Proc_affinity::Proc_affinity(Status_Manager &sm, uint32_t nslots, pid_t pid)
+Proc_affinity::Proc_affinity(Status_Manager &sm, int32_t nslots, pid_t pid)
     : sm_(sm), nslots_(nslots), pid_(pid), cpuset_from_cgroup_(get_cgroup()) {
   // Open cgroups file
-  if (nslots > cpuset_from_cgroup_.size()) {
+  if (static_cast<size_t>(nslots) > cpuset_from_cgroup_.size()) {
     die_with_err("More slots requested than available on the system, this "
                  "process can never run.",
                  -1);
@@ -34,7 +34,7 @@ std::vector<uint32_t> Proc_affinity::bind() {
                       siblings_affinity.begin(), siblings_affinity.end(),
                       std::inserter(allowed_cores, allowed_cores.begin()));
 
-  for (auto i = 0ul; i < nslots_; i++) {
+  for (auto i = 0l; i < nslots_; i++) {
     CPU_SET(allowed_cores[i], &mask_);
     out.push_back(allowed_cores[i]);
   }

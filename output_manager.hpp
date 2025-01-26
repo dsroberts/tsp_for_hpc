@@ -1,8 +1,9 @@
 #pragma once
 #include <string>
+#include <string_view>
 
-constexpr std::string out_file_template{"tsp.o"};
-constexpr std::string err_file_template{"tsp.e"};
+constexpr std::string_view out_file_template{"tsp.o"};
+constexpr std::string_view err_file_template{"tsp.e"};
 
 namespace tsp {
 class Output_handler {

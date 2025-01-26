@@ -26,6 +26,7 @@ static struct option long_options[] = {
     {"list-failed", no_argument, nullptr, 0},
     {"stdout", required_argument, nullptr, 'o'},
     {"stderr", required_argument, nullptr, 'e'},
+    {"rerun", required_argument, nullptr, 'r'},
     {"help", no_argument, nullptr, 'h'},
     {nullptr, 0, nullptr, 0}};
 
@@ -34,7 +35,11 @@ Config::Config(int argc, char *argv[])
     : bool_vars{{"disappear_output", false},
                 {"do_fork", true},
                 {"separate_stderr", false}},
-      int_vars{{"nslots", 1u}}, str_vars{} {
+      int_vars{
+          {"nslots", 1},
+          {"rerun", -1},
+      },
+      str_vars{} {
 
   if (argc == 1) {
     do_action(Action::list);
@@ -43,7 +48,7 @@ Config::Config(int argc, char *argv[])
   opterr = 0;
   int c;
   int option_index;
-  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:", long_options,
+  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:r:", long_options,
                           &option_index)) != -1) {
     switch (c) {
     case 'n':
@@ -61,6 +66,9 @@ Config::Config(int argc, char *argv[])
       break;
     case 'L':
       str_vars["category"] = std::string{optarg};
+      break;
+    case 'r':
+      int_vars["rerun"] = std::stoul(optarg);
       break;
     case 'i':
       do_action(Action::info, std::stoul(optarg));
@@ -105,7 +113,7 @@ Config::Config(int argc, char *argv[])
     }
   };
 }
-uint32_t Config::get_int(std::string key) { return int_vars[key]; };
+int32_t Config::get_int(std::string key) { return int_vars[key]; };
 std::string Config::get_string(std::string key) { return str_vars[key]; };
 bool Config::get_bool(std::string key) { return bool_vars[key]; };
 } // namespace tsp

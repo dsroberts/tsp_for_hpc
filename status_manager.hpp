@@ -28,6 +28,10 @@ constexpr std::string_view db_initialise(
     "CREATE TABLE IF NOT EXISTS stime (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "jobid INTEGER NOT NULL, time INTEGER, FOREIGN KEY(jobid) REFERENCES "
     "jobs(id) ON DELETE CASCADE);"
+    // Create start_state table
+    "CREATE TABLE IF NOT EXISTS start_state (id INTEGER PRIMARY KEY "
+    "AUTOINCREMENT, jobid INTEGER NOT NULL, cwd TEXT, environ BLOB, FOREIGN "
+    "KEY(jobid) REFERENCES job(id) ON DELETE CASCADE);"
     // Create end time table
     "CREATE TABLE IF NOT EXISTS etime (id INTEGER PRIMARY KEY AUTOINCREMENT,  "
     "jobid INTEGER NOT NULL, exit_status INTEGER, time INTEGER, FOREIGN "
@@ -96,7 +100,7 @@ struct job_stat {
 struct job_details {
   job_stat stat;
   std::string uuid;
-  uint32_t slots;
+  int32_t slots;
   std::optional<uint32_t> pid;
 };
 
@@ -106,7 +110,7 @@ public:
   Status_Manager(bool rw);
   Status_Manager();
   ~Status_Manager();
-  void add_cmd(Run_cmd cmd, std::string category, uint32_t slots);
+  void add_cmd(Run_cmd &cmd, std::string category, int32_t slots);
   void job_start();
   void job_end(int exit_stat);
   void save_output(const std::pair<std::string, std::string> &in);
@@ -122,8 +126,8 @@ public:
 
 private:
   sqlite3 *conn_;
-  uint32_t slots_req_;
-  const uint32_t total_slots_;
+  int32_t slots_req_;
+  const int32_t total_slots_;
   std::string gen_jobid();
 };
 } // namespace tsp

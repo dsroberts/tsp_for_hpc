@@ -30,7 +30,8 @@ constexpr std::string_view help{
     "1)\n"
     "  -E, --separate-stderr  Store stdout and stderr in different files\n"
     "  -L, --label=LABEL      Add a label to the task to facilitate simpler "
-    "querying\n\n"
+    "querying\n"
+    "  -r, --rerun=ID         Rerun job with id ID\n\n"
     "Job Querying Options:\n"
     "  -l, --list             Show the job list (default action)\n"
     "      --list-failed      Show the list of failed jobs\n"
@@ -47,13 +48,13 @@ constexpr std::string_view help{
 class Config {
 public:
   Config(int argc, char *argv[]);
-  uint32_t get_int(std::string key);
+  int32_t get_int(std::string key);
   std::string get_string(std::string key);
   bool get_bool(std::string key);
 
 private:
   std::map<std::string, bool> bool_vars{};
-  std::map<std::string, std::uint32_t> int_vars{};
+  std::map<std::string, std::int32_t> int_vars{};
   std::map<std::string, std::string> str_vars{};
 };
 } // namespace tsp

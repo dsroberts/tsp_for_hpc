@@ -40,9 +40,9 @@ Status_Manager::Status_Manager(bool rw)
 Status_Manager::Status_Manager() : Status_Manager(true) {};
 Status_Manager::~Status_Manager() { sqlite3_close_v2(conn_); }
 
-void Status_Manager::add_cmd(Run_cmd cmd, std::string category,
-                             uint32_t nslots) {
-  slots_req_ = nslots;
+void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
+                             int32_t slots) {
+  slots_req_ = slots;
   sqlite3_stmt *stmt;
   int sqlite_ret;
   if ((sqlite_ret = sqlite3_prepare_v2(
@@ -67,8 +67,7 @@ void Status_Manager::add_cmd(Run_cmd cmd, std::string category,
   if ((sqlite_ret = sqlite3_bind_int(stmt, 4, getpid())) != SQLITE_OK) {
     die_with_err("Unable bind pid", sqlite_ret);
   }
-  if ((sqlite_ret = sqlite3_bind_int(
-           stmt, 5, static_cast<int32_t>(slots_req_))) != SQLITE_OK) {
+  if ((sqlite_ret = sqlite3_bind_int(stmt, 5, slots_req_)) != SQLITE_OK) {
     die_with_err("Unable bind nslots", sqlite_ret);
   }
   if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_DONE) {
@@ -93,7 +92,7 @@ void Status_Manager::add_cmd(Run_cmd cmd, std::string category,
 bool Status_Manager::allowed_to_run() {
   sqlite3_stmt *stmt;
   int sqlite_ret;
-  uint32_t slots_used;
+  int32_t slots_used;
   if ((sqlite_ret = sqlite3_prepare_v2(conn_, "SELECT s FROM used_slots;", -1,
                                        &stmt, nullptr)) != SQLITE_OK) {
     die_with_err("Unable to prepare get used slots statement", sqlite_ret);
@@ -102,7 +101,7 @@ bool Status_Manager::allowed_to_run() {
     if (sqlite_ret != SQLITE_ROW) {
       die_with_err("Pid row unable to be returned", sqlite_ret);
     }
-    slots_used = static_cast<uint32_t>(sqlite3_column_int(stmt, 0));
+    slots_used = sqlite3_column_int(stmt, 0);
   }
   if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
     die_with_err("Unable finalize statement", sqlite_ret);
