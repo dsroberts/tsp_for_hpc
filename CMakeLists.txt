@@ -15,6 +15,7 @@ set(sources
     functions.cpp
     jitter.cpp
     run_cmd.cpp
+    sqlite_statement_manager.cpp
     status_manager.cpp
     status_writing.cpp
     output_manager.cpp

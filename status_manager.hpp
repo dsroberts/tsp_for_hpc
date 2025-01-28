@@ -8,6 +8,7 @@
 #include <string>
 #include <sys/types.h>
 #include <unistd.h>
+#include <utility>
 
 #include "functions.hpp"
 #include "run_cmd.hpp"
@@ -65,7 +66,11 @@ constexpr std::string_view clean(
     // Reset sequences
     "DELETE FROM sqlite_sequence;\0");
 
-constexpr std::string_view
+constexpr std::string_view insert_output_stmt(
+    "INSERT INTO job_output(jobid,stdout,stderr) VALUES (( SELECT id "
+    "FROM jobs WHERE uuid = ? ),?,?)");
+
+    constexpr std::string_view
     get_last_jobid_stmt("SELECT jobs.id FROM jobs LEFT JOIN qtime ON "
                         "jobid = jobs.id ORDER BY time DESC LIMIT 1;\0");
 
@@ -90,6 +95,9 @@ constexpr std::string_view
 
 constexpr std::string_view
     get_cmd_to_rerun_stmt("SELECT command_raw FROM jobs WHERE id = {}");
+
+constexpr std::string_view
+    get_state_stmt("SELECT environ,cwd FROM start_state WHERE id = {}");
 
 struct job_stat {
   uint32_t id;
@@ -129,6 +137,8 @@ public:
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
   std::string get_cmd_to_rerun(uint32_t id);
+  std::pair<char **, std::filesystem::path> get_state(uint32_t id);
+  void store_state(char **env, std::filesystem::path wd);
 
 private:
   sqlite3 *conn_;

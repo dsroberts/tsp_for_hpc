@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 #include <thread>
 
@@ -45,7 +46,7 @@ int main(int argc, char *argv[]) {
 
   auto stat = tsp::Status_Manager{};
   auto cmd = rerun
-                 ? tsp::Run_cmd(stat.get_cmd_to_rerun(config.get_int("rerun")))
+                 ? tsp::Run_cmd{stat.get_cmd_to_rerun(config.get_int("rerun"))}
                  : tsp::Run_cmd{argv, optind, argc};
   if (rerun) {
     // This variant of add_cmd will recover category and nslots from the jobid
@@ -84,6 +85,14 @@ int main(int argc, char *argv[]) {
 
     // We are now init, so fork again, and wait in a loop until it returns
     // ECHILD
+    //if (rerun) {
+    //  const auto [ stored_environ, wd ] = stat.get_state(config.get_int("rerun"));
+    //  std::filesystem::current_path(wd);
+    //  environ = stored_environ;
+    //} else {
+    //  stat.store_state(environ,std::filesystem::current_path());
+    //}
+
     int child_stat;
     int ret;
     pid_t waited_on_pid;
