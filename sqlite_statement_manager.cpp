@@ -2,7 +2,8 @@
 #include "functions.hpp"
 
 #include <iostream>
-#include <string>
+#include <sqlite3.h>
+#include <string_view>
 
 namespace tsp {
 
@@ -32,8 +33,7 @@ Sqlite_statement_manager::Sqlite_statement_manager(sqlite3 *conn,
     : Sqlite_statement_manager(conn, sql, false) {}
 
 Sqlite_statement_manager::~Sqlite_statement_manager() {
-  int sqlite_ret;
-  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+  if ((sqlite_ret_ = sqlite3_finalize(stmt)) != SQLITE_OK) {
     exit_with_sqlite_err("Unable finalize statement:\n", sql_, sqlite_ret_);
   };
 }
