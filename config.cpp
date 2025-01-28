@@ -1,6 +1,7 @@
 #include "config.hpp"
 
 #include <cstdint>
+#include <format>
 #include <iostream>
 #include <map>
 #include <optional>

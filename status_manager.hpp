@@ -19,7 +19,8 @@ constexpr std::string_view db_initialise(
     "PRAGMA foreign_keys = ON;"
     // Create command table
     "CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-    "uuid TEXT, command TEXT, category TEXT, pid INTEGER, slots INTEGER);"
+    "uuid TEXT, command TEXT, command_raw BLOB, category TEXT, pid INTEGER, "
+    "slots INTEGER);"
     // Create queue time table
     "CREATE TABLE IF NOT EXISTS qtime (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "jobid INTEGER NOT NULL, time INTEGER, FOREIGN KEY(jobid) REFERENCES "
@@ -87,6 +88,9 @@ constexpr std::string_view get_job_details_by_id_stmt(
 constexpr std::string_view
     get_job_output_stmt("SELECT {} FROM job_output WHERE jobid = {};");
 
+constexpr std::string_view
+    get_cmd_to_rerun_stmt("SELECT command_raw FROM jobs WHERE id = {}");
+
 struct job_stat {
   uint32_t id;
   std::string cmd;
@@ -111,6 +115,7 @@ public:
   Status_Manager();
   ~Status_Manager();
   void add_cmd(Run_cmd &cmd, std::string category, int32_t slots);
+  void add_cmd(Run_cmd &cmd, uint32_t id);
   void job_start();
   void job_end(int exit_stat);
   void save_output(const std::pair<std::string, std::string> &in);
@@ -123,6 +128,7 @@ public:
   std::vector<job_stat> get_failed_job_stats();
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
+  std::string get_cmd_to_rerun(uint32_t id);
 
 private:
   sqlite3 *conn_;

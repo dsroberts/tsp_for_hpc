@@ -34,6 +34,7 @@ void die_with_err_errno(std::string msg, int status) {
   std::cerr << msg << std::endl;
   std::cerr << "stat=" << status << ", errno=" << errno << std::endl;
   std::cerr << strerror(errno) << std::endl;
+  std::exit(EXIT_FAILURE);
 };
 
 std::vector<uint32_t> parse_cpuset_range(std::string in) {

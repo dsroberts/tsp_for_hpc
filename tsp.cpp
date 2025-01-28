@@ -44,8 +44,15 @@ int main(int argc, char *argv[]) {
   }
 
   auto stat = tsp::Status_Manager{};
-  auto cmd = tsp::Run_cmd{argv, optind, argc};
-  stat.add_cmd(cmd, config.get_string("category"), config.get_int("nslots"));
+  auto cmd = rerun
+                 ? tsp::Run_cmd(stat.get_cmd_to_rerun(config.get_int("rerun")))
+                 : tsp::Run_cmd{argv, optind, argc};
+  if (rerun) {
+    // This variant of add_cmd will recover category and nslots from the jobid
+    stat.add_cmd(cmd, config.get_int("rerun"));
+  } else {
+    stat.add_cmd(cmd, config.get_string("category"), config.get_int("nslots"));
+  }
 
   auto jitter = tsp::Jitter{tsp::jitter_ms};
   std::this_thread::sleep_for(tsp::jitter_ms + jitter.get());

@@ -47,8 +47,9 @@ void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
   int sqlite_ret;
   if ((sqlite_ret = sqlite3_prepare_v2(
            conn_,
-           "INSERT INTO jobs(uuid,command,category,pid,slots) VALUES "
-           "(?,?,?,?,?)",
+           "INSERT INTO jobs(uuid,command,command_raw,category,pid,slots) "
+           "VALUES "
+           "(?,?,?,?,?,?)",
            -1, &stmt, nullptr)) != SQLITE_OK) {
     die_with_err("Unable to prepare new jobid statement", sqlite_ret);
   }
@@ -60,14 +61,91 @@ void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
                                       SQLITE_TRANSIENT)) != SQLITE_OK) {
     die_with_err("Unable bind command", sqlite_ret);
   }
-  if ((sqlite_ret = sqlite3_bind_text(stmt, 3, category.c_str(), -1,
+  auto raw_cmd = cmd.serialise();
+  if ((sqlite_ret = sqlite3_bind_blob(stmt, 3, raw_cmd.data(), raw_cmd.size(),
+                                      SQLITE_STATIC)) != SQLITE_OK) {
+    die_with_err("Unable bind raw command", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_bind_text(stmt, 4, category.c_str(), -1,
                                       nullptr)) != SQLITE_OK) {
     die_with_err("Unable bind category", sqlite_ret);
   }
-  if ((sqlite_ret = sqlite3_bind_int(stmt, 4, getpid())) != SQLITE_OK) {
+  if ((sqlite_ret = sqlite3_bind_int(stmt, 5, getpid())) != SQLITE_OK) {
     die_with_err("Unable bind pid", sqlite_ret);
   }
-  if ((sqlite_ret = sqlite3_bind_int(stmt, 5, slots_req_)) != SQLITE_OK) {
+  if ((sqlite_ret = sqlite3_bind_int(stmt, 6, slots_req_)) != SQLITE_OK) {
+    die_with_err("Unable bind nslots", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_DONE) {
+    die_with_err("Unable insert data", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+
+  char *sqlite_err;
+  if ((sqlite_ret =
+           sqlite3_exec(conn_,
+                        std::format("INSERT INTO qtime(jobid,time) SELECT "
+                                    "id,{} FROM jobs WHERE uuid = \"{}\";",
+                                    now(), jobid)
+                            .c_str(),
+                        nullptr, nullptr, &sqlite_err)) != SQLITE_OK) {
+    die_with_err("Unable to prepare new jobid statement", sqlite_ret);
+  }
+}
+
+void Status_Manager::add_cmd(Run_cmd &cmd, uint32_t id) {
+  sqlite3_stmt *stmt;
+  int sqlite_ret;
+
+  if ((sqlite_ret = sqlite3_prepare_v2(
+           conn_,
+           std::format("SELECT category,slots FROM jobs WHERE id = {}", id)
+               .c_str(),
+           -1, &stmt, nullptr)) != SQLITE_OK) {
+    die_with_err("Unable to prepare new jobid statement", sqlite_ret);
+  }
+
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
+    die_with_err("No job with requested id exists", sqlite_ret);
+  }
+  auto category =
+      std::string{reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0))};
+  slots_req_ = sqlite3_column_int(stmt, 1);
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+
+  if ((sqlite_ret = sqlite3_prepare_v2(
+           conn_,
+           "INSERT INTO jobs(uuid,command,command_raw,category,pid,slots) "
+           "VALUES "
+           "(?,?,?,?,?,?)",
+           -1, &stmt, nullptr)) != SQLITE_OK) {
+    die_with_err("Unable to prepare new jobid statement", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_bind_text(stmt, 1, jobid.c_str(), -1, nullptr)) !=
+      SQLITE_OK) {
+    die_with_err("Unable bind jobid", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_bind_text(stmt, 2, cmd.print().c_str(), -1,
+                                      SQLITE_TRANSIENT)) != SQLITE_OK) {
+    die_with_err("Unable bind command", sqlite_ret);
+  }
+  auto raw_cmd = cmd.serialise();
+  if ((sqlite_ret = sqlite3_bind_blob(stmt, 3, raw_cmd.data(), raw_cmd.size(),
+                                      SQLITE_STATIC)) != SQLITE_OK) {
+    die_with_err("Unable bind raw command", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_bind_text(stmt, 4, category.c_str(), -1,
+                                      nullptr)) != SQLITE_OK) {
+    die_with_err("Unable bind category", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_bind_int(stmt, 5, getpid())) != SQLITE_OK) {
+    die_with_err("Unable bind pid", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_bind_int(stmt, 6, slots_req_)) != SQLITE_OK) {
     die_with_err("Unable bind nslots", sqlite_ret);
   }
   if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_DONE) {
@@ -423,6 +501,27 @@ std::string Status_Manager::get_job_stderr(uint32_t id) {
   }
   return out;
 };
+
+std::string Status_Manager::get_cmd_to_rerun(uint32_t id) {
+  int sqlite_ret;
+  sqlite3_stmt *stmt;
+  if ((sqlite_ret = sqlite3_prepare_v2(
+                        conn_, std::format(get_cmd_to_rerun_stmt, id).c_str(),
+                        -1, &stmt, nullptr) != SQLITE_OK)) {
+    die_with_err("Unable to prepare get job output statement", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_step(stmt)) != SQLITE_ROW) {
+    die_with_err("No job with requested id exists", sqlite_ret);
+  }
+  std::cout << sqlite3_column_bytes(stmt, 0) << std::endl;
+  auto out =
+      std::string{reinterpret_cast<const char *>(sqlite3_column_blob(stmt, 0)),
+                  static_cast<size_t>(sqlite3_column_bytes(stmt, 0))};
+  if ((sqlite_ret = sqlite3_finalize(stmt)) != SQLITE_OK) {
+    die_with_err("Unable finalize statement", sqlite_ret);
+  }
+  return out;
+}
 
 std::string Status_Manager::gen_jobid() {
   // https://stackoverflow.com/questions/24365331/how-can-i-generate-uuid-in-c-without-using-boost-library
