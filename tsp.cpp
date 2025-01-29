@@ -22,7 +22,6 @@ constexpr std::chrono::milliseconds base_wait_period{2000};
 int main(int argc, char *argv[]) {
 
   auto config = tsp::Config(argc, argv);
-
   auto rerun = (config.get_int("rerun") >= 0);
 
   if (!rerun) {
@@ -82,16 +81,15 @@ int main(int argc, char *argv[]) {
   int fork_stat;
   // exec & monitor here.
   if (0 == (fork_pid = fork())) {
-
     // We are now init, so fork again, and wait in a loop until it returns
     // ECHILD
-    //if (rerun) {
-    //  const auto [ stored_environ, wd ] = stat.get_state(config.get_int("rerun"));
-    //  std::filesystem::current_path(wd);
-    //  environ = stored_environ;
-    //} else {
-    //  stat.store_state(environ,std::filesystem::current_path());
-    //}
+    if (rerun) {
+      const auto [wd, stored_environ] = stat.get_state(config.get_int("rerun"));
+      std::filesystem::current_path(wd);
+      environ = stored_environ;
+    } else {
+      stat.store_state(std::filesystem::current_path(), environ);
+    }
 
     int child_stat;
     int ret;

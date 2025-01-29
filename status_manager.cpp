@@ -1,6 +1,7 @@
 #include "status_manager.hpp"
 
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -31,7 +32,12 @@ Status_Manager::Status_Manager(bool rw)
     die_with_err("Unable to set busy timeout", sqlite_ret);
   }
   if (rw) {
-    auto ssm = Sqlite_statement_manager(conn_, db_initialise, true);
+    char *sqlite_err;
+    // Use exec here as db_initialise contains many statements.
+    if ((sqlite_ret = sqlite3_exec(conn_, db_initialise.data(), nullptr,
+                                   nullptr, &sqlite_err)) != SQLITE_OK) {
+      exit_with_sqlite_err(sqlite_err, db_initialise, sqlite_ret, conn_);
+    }
   }
 }
 Status_Manager::Status_Manager() : Status_Manager(true) {};
@@ -182,6 +188,31 @@ void Status_Manager::save_output(
   if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 3, in.second.c_str(), -1,
                                       nullptr)) != SQLITE_OK) {
     die_with_err("Unable bind stderr", sqlite_ret);
+  }
+  ssm.step();
+}
+
+void Status_Manager::store_state(std::filesystem::path wd, char **env) {
+  auto ssm = Sqlite_statement_manager(conn_, insert_start_state_stmt);
+  int sqlite_ret;
+  if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 1, jobid.c_str(), -1,
+                                      nullptr)) != SQLITE_OK) {
+    die_with_err("Unable bind jobid", sqlite_ret);
+  }
+  if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 2, wd.c_str(), -1, nullptr)) !=
+      SQLITE_OK) {
+    die_with_err("Unable to bind working directory", sqlite_ret);
+  }
+  std::string save_env{};
+  for (auto i = 0l; env[i] != nullptr; ++i) {
+    save_env += env[i];
+    save_env += '\0';
+  }
+  save_env += '\0';
+  if ((sqlite_ret = sqlite3_bind_blob(ssm.stmt, 3, save_env.data(),
+                                      save_env.size(), SQLITE_STATIC)) !=
+      SQLITE_OK) {
+    die_with_err("Unable bind environment", sqlite_ret);
   }
   ssm.step();
 }
@@ -340,27 +371,52 @@ std::string Status_Manager::get_cmd_to_rerun(uint32_t id) {
   auto ssm =
       Sqlite_statement_manager(conn_, std::format(get_cmd_to_rerun_stmt, id));
   ssm.step(true);
-  std::cout << sqlite3_column_bytes(ssm.stmt, 0) << std::endl;
   auto out = std::string{
       reinterpret_cast<const char *>(sqlite3_column_blob(ssm.stmt, 0)),
       static_cast<size_t>(sqlite3_column_bytes(ssm.stmt, 0))};
   return out;
 }
 
-std::pair<char **, std::filesystem::path>
+std::pair<std::filesystem::path, char **>
 Status_Manager::get_state(uint32_t id) {
-  std::pair<char **, std::filesystem::path> out;
+  std::pair<std::filesystem::path, char **> out;
   auto ssm = Sqlite_statement_manager(conn_, std::format(get_state_stmt, id));
   ssm.step(true);
-  auto environ_string = std::string{
-      reinterpret_cast<const char *>(sqlite3_column_blob(ssm.stmt, 0)),
-      static_cast<size_t>(sqlite3_column_bytes(ssm.stmt, 0))};
-
-  out.second = std::filesystem::path{
-      reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 1))};
+  out.first = std::filesystem::path{
+      reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 0))};
+  auto environ_string = std::string_view{
+      reinterpret_cast<const char *>(sqlite3_column_blob(ssm.stmt, 1)),
+      static_cast<size_t>(sqlite3_column_bytes(ssm.stmt, 1))};
+  // How many tokens?
+  auto ntokens = 0ul;
+  for (auto c : environ_string) {
+    if (c == '\0') {
+      ntokens++;
+    }
+  }
+  // Allocate output array
+  if (nullptr ==
+      (out.second = static_cast<char **>(malloc((ntokens) * sizeof(char *))))) {
+    die_with_err_errno("Malloc failed", -1);
+  }
+  // Walk through allocate memory for each token and copy in.
+  auto ctr = 0ul;
+  auto start = 0ul;
+  auto end = environ_string.find('\0');
+  while (ctr < ntokens - 1) {
+    std::string_view substr = environ_string.substr(start, end - start + 1);
+    if (nullptr ==
+        (out.second[ctr] = static_cast<char *>(std::malloc(substr.size())))) {
+      die_with_err_errno("Malloc failed", -1);
+    }
+    std::memcpy(out.second[ctr], substr.data(), substr.size());
+    start = end + 1;
+    end = environ_string.find('\0', start);
+    ctr++;
+  }
+  out.second[ntokens - 1] = nullptr;
   return out;
 }
-void Status_Manager::store_state(char **env, std::filesystem::path wd) {}
 
 std::string Status_Manager::gen_jobid() {
   // https://stackoverflow.com/questions/24365331/how-can-i-generate-uuid-in-c-without-using-boost-library

@@ -31,9 +31,9 @@ constexpr std::string_view db_initialise(
     "jobid INTEGER NOT NULL, time INTEGER, FOREIGN KEY(jobid) REFERENCES "
     "jobs(id) ON DELETE CASCADE);"
     // Create start_state table
-    "CREATE TABLE IF NOT EXISTS start_state (id INTEGER PRIMARY KEY "
-    "AUTOINCREMENT, jobid INTEGER NOT NULL, cwd TEXT, environ BLOB, FOREIGN "
-    "KEY(jobid) REFERENCES job(id) ON DELETE CASCADE);"
+    "CREATE TABLE IF NOT EXISTS start_state (jobid INTEGER UNIQUE NOT NULL, "
+    "cwd TEXT, environ BLOB, FOREIGN KEY(jobid) REFERENCES jobs(id) ON DELETE "
+    "CASCADE);"
     // Create end time table
     "CREATE TABLE IF NOT EXISTS etime (id INTEGER PRIMARY KEY AUTOINCREMENT,  "
     "jobid INTEGER NOT NULL, exit_status INTEGER, time INTEGER, FOREIGN "
@@ -68,9 +68,13 @@ constexpr std::string_view clean(
 
 constexpr std::string_view insert_output_stmt(
     "INSERT INTO job_output(jobid,stdout,stderr) VALUES (( SELECT id "
-    "FROM jobs WHERE uuid = ? ),?,?)");
+    "FROM jobs WHERE uuid = ? ),?,?)\0");
 
-    constexpr std::string_view
+constexpr std::string_view insert_start_state_stmt(
+    "INSERT INTO start_state(jobid,cwd,environ) VALUES (( SELECT id FROM jobs "
+    "WHERE uuid = ? ),?,?)\0");
+
+constexpr std::string_view
     get_last_jobid_stmt("SELECT jobs.id FROM jobs LEFT JOIN qtime ON "
                         "jobid = jobs.id ORDER BY time DESC LIMIT 1;\0");
 
@@ -97,7 +101,7 @@ constexpr std::string_view
     get_cmd_to_rerun_stmt("SELECT command_raw FROM jobs WHERE id = {}");
 
 constexpr std::string_view
-    get_state_stmt("SELECT environ,cwd FROM start_state WHERE id = {}");
+    get_state_stmt("SELECT cwd,environ FROM start_state WHERE jobid = {}");
 
 struct job_stat {
   uint32_t id;
@@ -137,8 +141,8 @@ public:
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
   std::string get_cmd_to_rerun(uint32_t id);
-  std::pair<char **, std::filesystem::path> get_state(uint32_t id);
-  void store_state(char **env, std::filesystem::path wd);
+  std::pair<std::filesystem::path, char **> get_state(uint32_t id);
+  void store_state(std::filesystem::path wd, char **env);
 
 private:
   sqlite3 *conn_;

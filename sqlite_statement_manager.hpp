@@ -4,7 +4,10 @@
 #include <string_view>
 
 namespace tsp {
-  class Sqlite_statement_manager {
+
+void exit_with_sqlite_err(const char *msg, std::string_view sql, int ret,
+                          sqlite3 *conn);
+class Sqlite_statement_manager {
 public:
   Sqlite_statement_manager(sqlite3 *conn, std::string_view sql);
   Sqlite_statement_manager(sqlite3 *conn, std::string_view sql, bool dostep);
@@ -14,8 +17,8 @@ public:
   sqlite3_stmt *stmt;
 
 private:
-  void init(sqlite3 *conn);
   std::string_view sql_;
   int sqlite_ret_;
+  sqlite3 *conn_;
 };
 } // namespace tsp
