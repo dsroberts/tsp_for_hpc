@@ -120,6 +120,12 @@ struct job_details {
   std::optional<uint32_t> pid;
 };
 
+struct prog_state {
+  char **env_ptrs;
+  std::filesystem::path wd;
+  std::string env_buf;
+};
+
 class Status_Manager {
 public:
   const std::string jobid;
@@ -141,8 +147,8 @@ public:
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
   std::string get_cmd_to_rerun(uint32_t id);
-  std::pair<std::filesystem::path, char **> get_state(uint32_t id);
-  void store_state(std::filesystem::path wd, char **env);
+  prog_state get_state(uint32_t id);
+  void store_state(prog_state);
 
 private:
   sqlite3 *conn_;

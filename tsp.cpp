@@ -84,12 +84,11 @@ int main(int argc, char *argv[]) {
     // We are now init, so fork again, and wait in a loop until it returns
     // ECHILD
     if (rerun) {
-      const auto [wd, stored_environ] = stat.get_state(config.get_int("rerun"));
-      std::filesystem::current_path(wd);
-      environ = stored_environ;
-    } else {
-      stat.store_state(std::filesystem::current_path(), environ);
+      const auto ps = stat.get_state(config.get_int("rerun"));
+      std::filesystem::current_path(ps.wd);
+      environ = ps.env_ptrs;
     }
+    stat.store_state({environ, std::filesystem::current_path(), {}});
 
     int child_stat;
     int ret;

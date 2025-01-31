@@ -42,14 +42,14 @@ std::pair<std::string, std::string> Output_handler::get_output() {
   ss_out << stdout_stream.rdbuf();
   stdout_stream.close();
   std::filesystem::remove(stdout_fn_);
-  out_bufs_.first = ss_out.str();
+  out_bufs_.first = std::move(ss_out.str());
 
   std::ifstream stderr_stream(stderr_fn_);
   std::stringstream ss_err{};
   ss_err << stdout_stream.rdbuf();
   stderr_stream.close();
   std::filesystem::remove(stderr_fn_);
-  out_bufs_.second = ss_err.str();
+  out_bufs_.second = std::move(ss_err.str());
 
   return out_bufs_;
 }

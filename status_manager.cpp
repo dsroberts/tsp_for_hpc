@@ -192,20 +192,20 @@ void Status_Manager::save_output(
   ssm.step();
 }
 
-void Status_Manager::store_state(std::filesystem::path wd, char **env) {
+void Status_Manager::store_state(prog_state ps) {
   auto ssm = Sqlite_statement_manager(conn_, insert_start_state_stmt);
   int sqlite_ret;
   if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 1, jobid.c_str(), -1,
                                       nullptr)) != SQLITE_OK) {
     die_with_err("Unable bind jobid", sqlite_ret);
   }
-  if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 2, wd.c_str(), -1, nullptr)) !=
-      SQLITE_OK) {
+  if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 2, ps.wd.c_str(), -1,
+                                      nullptr)) != SQLITE_OK) {
     die_with_err("Unable to bind working directory", sqlite_ret);
   }
   std::string save_env{};
-  for (auto i = 0l; env[i] != nullptr; ++i) {
-    save_env += env[i];
+  for (auto i = 0l; ps.env_ptrs[i] != nullptr; ++i) {
+    save_env += ps.env_ptrs[i];
     save_env += '\0';
   }
   save_env += '\0';
@@ -223,8 +223,7 @@ Read-only functions
 uint32_t Status_Manager::get_last_job_id() {
   auto ssm = Sqlite_statement_manager(conn_, get_last_jobid_stmt);
   ssm.step(true);
-  auto out = static_cast<uint32_t>(sqlite3_column_int(ssm.stmt, 0));
-  return out;
+  return static_cast<uint32_t>(sqlite3_column_int(ssm.stmt, 0));
 }
 
 job_stat Status_Manager::get_job_by_id(uint32_t id) {
@@ -353,38 +352,28 @@ std::string Status_Manager::get_job_stdout(uint32_t id) {
   auto ssm = Sqlite_statement_manager(
       conn_, std::format(get_job_output_stmt, "stdout", id));
   ssm.step(true);
-  auto out = std::string{
-      reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 0))};
-  return out;
+  return {reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 0))};
 }
 
 std::string Status_Manager::get_job_stderr(uint32_t id) {
   auto ssm = Sqlite_statement_manager(
       conn_, std::format(get_job_output_stmt, "stderr", id));
   ssm.step(true);
-  auto out = std::string{
-      reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 0))};
-  return out;
+  return {reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 0))};
 }
 
 std::string Status_Manager::get_cmd_to_rerun(uint32_t id) {
   auto ssm =
       Sqlite_statement_manager(conn_, std::format(get_cmd_to_rerun_stmt, id));
   ssm.step(true);
-  auto out = std::string{
-      reinterpret_cast<const char *>(sqlite3_column_blob(ssm.stmt, 0)),
-      static_cast<size_t>(sqlite3_column_bytes(ssm.stmt, 0))};
-  return out;
+  return {reinterpret_cast<const char *>(sqlite3_column_blob(ssm.stmt, 0)),
+          static_cast<size_t>(sqlite3_column_bytes(ssm.stmt, 0))};
 }
 
-std::pair<std::filesystem::path, char **>
-Status_Manager::get_state(uint32_t id) {
-  std::pair<std::filesystem::path, char **> out;
+prog_state Status_Manager::get_state(uint32_t id) {
   auto ssm = Sqlite_statement_manager(conn_, std::format(get_state_stmt, id));
   ssm.step(true);
-  out.first = std::filesystem::path{
-      reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 0))};
-  auto environ_string = std::string_view{
+  auto environ_string = std::string{
       reinterpret_cast<const char *>(sqlite3_column_blob(ssm.stmt, 1)),
       static_cast<size_t>(sqlite3_column_bytes(ssm.stmt, 1))};
   // How many tokens?
@@ -395,27 +384,27 @@ Status_Manager::get_state(uint32_t id) {
     }
   }
   // Allocate output array
+  char **env_ptrs;
   if (nullptr ==
-      (out.second = static_cast<char **>(malloc((ntokens) * sizeof(char *))))) {
+      (env_ptrs = static_cast<char **>(malloc((ntokens) * sizeof(char *))))) {
     die_with_err_errno("Malloc failed", -1);
   }
-  // Walk through allocate memory for each token and copy in.
+  // Walk through the copied environ_string and create a pointer to
+  // the start of each token
   auto ctr = 0ul;
   auto start = 0ul;
   auto end = environ_string.find('\0');
   while (ctr < ntokens - 1) {
-    std::string_view substr = environ_string.substr(start, end - start + 1);
-    if (nullptr ==
-        (out.second[ctr] = static_cast<char *>(std::malloc(substr.size())))) {
-      die_with_err_errno("Malloc failed", -1);
-    }
-    std::memcpy(out.second[ctr], substr.data(), substr.size());
+    env_ptrs[ctr] = &environ_string[start];
     start = end + 1;
     end = environ_string.find('\0', start);
     ctr++;
   }
-  out.second[ntokens - 1] = nullptr;
-  return out;
+  env_ptrs[ntokens - 1] = nullptr;
+  return {env_ptrs,
+          std::filesystem::path{
+              reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 0))},
+          std::move(environ_string)};
 }
 
 std::string Status_Manager::gen_jobid() {
