@@ -90,6 +90,14 @@ constexpr std::string_view get_failed_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
     "FROM job_details WHERE exit_status IS NOT NULL AND exit_status != 0\0");
 
+constexpr std::string_view get_queued_jobs_stmt(
+    "SELECT id,command,category,qtime,stime,etime,exit_status "
+    "FROM job_details WHERE stime IS NULL\0");
+
+constexpr std::string_view get_running_jobs_stmt(
+    "SELECT id,command,category,qtime,stime,etime,exit_status "
+    "FROM job_details WHERE stime IS NOT NULL AND etime IS NULL\0");
+
 constexpr std::string_view get_job_details_by_id_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status,uuid,slots,pid "
     "FROM job_details WHERE id = {};");
@@ -142,8 +150,7 @@ public:
   uint32_t get_last_job_id();
   job_stat get_job_by_id(uint32_t id);
   job_details get_job_details_by_id(uint32_t id);
-  std::vector<job_stat> get_all_job_stats();
-  std::vector<job_stat> get_failed_job_stats();
+  std::vector<job_stat> get_job_stats_by_category(char s);
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
   std::string get_cmd_to_rerun(uint32_t id);

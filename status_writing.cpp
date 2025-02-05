@@ -69,7 +69,7 @@ void format_jobs_table(std::vector<tsp::job_stat> jobs) {
 
 void format_jobs_gh_md(std::vector<tsp::job_stat> jobs) {
   std::cout << "## Case timings\nCase | Time | Success?\n---- | ---- | ----\n";
-  for (const auto &info : jobs) {
+  for (auto &info : jobs) {
     if (!info.etime) {
       continue;
     }
@@ -89,7 +89,14 @@ void format_jobs_gh_md(std::vector<tsp::job_stat> jobs) {
     if (info.category) {
       cmd = std::format("{}: {}", info.category.value(), cmd);
     }
-    std::cout << cmd << " | "
+    info.cmd = cmd;
+  }
+  std::sort(jobs.begin(),jobs.end(),[](tsp::job_stat a, tsp::job_stat b){ return a.cmd < b.cmd; });
+  for (const auto &info : jobs) {
+    if (!info.etime) {
+      continue;
+    }
+    std::cout << info.cmd << " | "
               << format_hh_mm_ss(info.etime.value() - info.stime.value())
               << " | " << (info.status == 0 ? "Yes\n" : "No\n");
   }
@@ -136,44 +143,66 @@ void print_job_detail(Status_Manager sm_ro, uint32_t id) {
   std::cout << "Internal UUID: " << info.uuid << std::endl;
 };
 void print_all_jobs(Status_Manager sm_ro) {
-  format_jobs_table(sm_ro.get_all_job_stats());
+  format_jobs_table(sm_ro.get_job_stats_by_category('a'));
 };
 void print_failed_jobs(Status_Manager sm_ro) {
-  format_jobs_table(sm_ro.get_failed_job_stats());
+  format_jobs_table(sm_ro.get_job_stats_by_category('f'));
+}
+void print_queued_jobs(Status_Manager sm_ro) {
+  format_jobs_table(sm_ro.get_job_stats_by_category('q'));
+}
+void print_running_jobs(Status_Manager sm_ro) {
+  format_jobs_table(sm_ro.get_job_stats_by_category('r'));
 }
 void print_github_summary(Status_Manager sm_ro) {
-  format_jobs_gh_md(sm_ro.get_all_job_stats());
+  format_jobs_gh_md(sm_ro.get_job_stats_by_category('a'));
 };
 
 void do_action(Action a, uint32_t jobid) {
   auto sm_ro = Status_Manager(false);
-  if (a == Action::stdout) {
-    print_job_stdout(sm_ro, jobid);
-  } else if (a == Action::stderr) {
-    print_job_stderr(sm_ro, jobid);
-  } else if (a == Action::info) {
+  switch (a) {
+  case Action::info:
     print_job_detail(sm_ro, jobid);
+    break;
+  case Action::stdout:
+    print_job_stdout(sm_ro, jobid);
+    break;
+  case Action::stderr:
+    print_job_stderr(sm_ro, jobid);
+    break;
+  default:
+    die_with_err("Error! Jobid supplied for action that cannot take jobid",-1);
   }
   std::exit(EXIT_SUCCESS);
 };
 
 void do_action(Action a) {
   auto sm_ro = Status_Manager(false);
-  if (a == Action::github_summary) {
+  switch (a) {
+  case Action::github_summary:
     print_github_summary(sm_ro);
-  } else if (a == Action::info) {
-    auto jobid = sm_ro.get_last_job_id();
-    print_job_detail(sm_ro, jobid);
-  } else if (a == Action::stdout) {
-    auto jobid = sm_ro.get_last_job_id();
-    print_job_stdout(sm_ro, jobid);
-  } else if (a == Action::stderr) {
-    auto jobid = sm_ro.get_last_job_id();
-    print_job_stderr(sm_ro, jobid);
-  } else if (a == Action::list) {
+    break;
+  case Action::info:
+    print_job_detail(sm_ro, sm_ro.get_last_job_id());
+    break;
+  case Action::stdout:
+    print_job_stdout(sm_ro, sm_ro.get_last_job_id());
+    break;
+  case Action::stderr:
+    print_job_stderr(sm_ro, sm_ro.get_last_job_id());
+    break;
+  case Action::list:
     print_all_jobs(sm_ro);
-  } else if (a == Action::list_failed) {
+    break;
+  case Action::list_failed:
     print_failed_jobs(sm_ro);
+    break;
+  case Action::list_queued:
+    print_queued_jobs(sm_ro);
+    break;
+  case Action::list_running:
+    print_running_jobs(sm_ro);
+    break;
   }
   std::exit(EXIT_SUCCESS);
 };

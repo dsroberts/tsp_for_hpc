@@ -25,6 +25,8 @@ static struct option long_options[] = {
     {"db-path", no_argument, nullptr, 0},
     {"gh-summary", no_argument, nullptr, 0},
     {"list-failed", no_argument, nullptr, 0},
+    {"list-queued", no_argument, nullptr, 0},
+    {"list-running", no_argument, nullptr, 0},
     {"stdout", required_argument, nullptr, 'o'},
     {"stderr", required_argument, nullptr, 'e'},
     {"rerun", required_argument, nullptr, 'r'},
@@ -110,7 +112,12 @@ Config::Config(int argc, char *argv[])
       if (std::string{"list-failed"} == long_options[option_index].name) {
         do_action(Action::list_failed);
       }
-      break;
+      if (std::string{"list-queued"} == long_options[option_index].name) {
+        do_action(Action::list_queued);
+      }
+      if (std::string{"list-running"} == long_options[option_index].name) {
+        do_action(Action::list_running);
+      }
     }
   };
 }

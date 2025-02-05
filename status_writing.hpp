@@ -11,6 +11,8 @@ enum class Action {
   info,
   github_summary,
   list_failed,
+  list_queued,
+  list_running,
 };
 
 void do_action(Action a);

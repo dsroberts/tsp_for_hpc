@@ -255,38 +255,24 @@ job_stat Status_Manager::get_job_by_id(uint32_t id) {
   return out;
 }
 
-std::vector<job_stat> Status_Manager::get_all_job_stats() {
-  auto ssm = Sqlite_statement_manager(conn_, get_all_jobs_stmt);
-  std::vector<job_stat> out;
-  while (ssm.step() == SQLITE_ROW) {
-    job_stat tmp_stat;
-    tmp_stat.id = static_cast<uint32_t>(sqlite3_column_int(ssm.stmt, 0));
-    tmp_stat.cmd = std::string{
-        reinterpret_cast<const char *>(sqlite3_column_text(ssm.stmt, 1))};
-    auto tmp = sqlite3_column_text(ssm.stmt, 2);
-    if (tmp[0] != '\0') {
-      tmp_stat.category.emplace(reinterpret_cast<const char *>(tmp));
-    }
-    tmp_stat.qtime = sqlite3_column_int64(ssm.stmt, 3);
-    tmp = sqlite3_column_text(ssm.stmt, 4);
-    if (!!tmp) {
-      tmp_stat.stime.emplace(sqlite3_column_int64(ssm.stmt, 4));
-    }
-    tmp = sqlite3_column_text(ssm.stmt, 5);
-    if (!!tmp) {
-      tmp_stat.etime.emplace(sqlite3_column_int64(ssm.stmt, 5));
-    }
-    tmp = sqlite3_column_text(ssm.stmt, 6);
-    if (!!tmp) {
-      tmp_stat.status.emplace(sqlite3_column_int(ssm.stmt, 6));
-    }
-    out.push_back(tmp_stat);
-  }
-  return out;
-}
+std::vector<job_stat> Status_Manager::get_job_stats_by_category(char s) {
 
-std::vector<job_stat> Status_Manager::get_failed_job_stats() {
-  auto ssm = Sqlite_statement_manager(conn_, get_failed_jobs_stmt);
+  std::string_view stmt;
+  switch (s) {
+  case 'a': // all
+    stmt = get_all_jobs_stmt;
+    break;
+  case 'f': // failed
+    stmt = get_failed_jobs_stmt;
+    break;
+  case 'q': // queued
+    stmt = get_queued_jobs_stmt;
+    break;
+  case 'r': // running
+    stmt = get_running_jobs_stmt;
+    break;
+  }
+  auto ssm = Sqlite_statement_manager(conn_, stmt);
   std::vector<job_stat> out;
   while (ssm.step() == SQLITE_ROW) {
     job_stat tmp_stat;

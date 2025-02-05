@@ -35,6 +35,8 @@ constexpr std::string_view help{
     "Job Querying Options:\n"
     "  -l, --list             Show the job list (default action)\n"
     "      --list-failed      Show the list of failed jobs\n"
+    "      --list-running     Show the list of running jobs\n"
+    "      --list-queued      Show the list of queued jobs\n"
     "  -i, --info=[ID]        Show detailed info for job [ID] (latest if ID is "
     "omitted)\n"
     "  -o, --stdout=[ID]      Display the output of the job [ID] (latest if ID \n"
