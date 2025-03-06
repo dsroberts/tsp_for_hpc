@@ -59,7 +59,7 @@ std::vector<uint32_t> parse_cpuset_range(std::string in) {
 
 std::vector<uint32_t> get_cgroup() {
   static std::string cgroup_fn("/proc/self/cgroup");
-#ifdef CRAY
+#ifdef CGROUPV2
   static std::string cgroup_cpuset_path_prefix("/sys/fs/cgroup");
   static std::string cpuset_filename("/cpuset.cpus.effective");
 #else

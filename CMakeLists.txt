@@ -9,6 +9,11 @@ find_package(SQLite3 REQUIRED)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 
+option(CGROUPV2 "Cgroup type used on target system" OFF)
+if(CGROUPV2)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCGROUPV2")
+endif(CGROUPV2)
+
 set(sources
     config.cpp
     locker.cpp
