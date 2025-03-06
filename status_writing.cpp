@@ -68,7 +68,7 @@ void format_jobs_table(std::vector<tsp::job_stat> jobs) {
 }
 
 void format_jobs_gh_md(std::vector<tsp::job_stat> jobs) {
-  std::cout << "## Case timings\nCase | Time | Success?\n---- | ---- | ----\n";
+  std::cout << "## Case timings\nCase | Time | Success?\n---- | ----: | ----\n";
   for (auto &info : jobs) {
     if (!info.etime) {
       continue;
@@ -91,7 +91,8 @@ void format_jobs_gh_md(std::vector<tsp::job_stat> jobs) {
     }
     info.cmd = cmd;
   }
-  std::sort(jobs.begin(),jobs.end(),[](tsp::job_stat a, tsp::job_stat b){ return a.cmd < b.cmd; });
+  std::sort(jobs.begin(), jobs.end(),
+            [](tsp::job_stat a, tsp::job_stat b) { return a.cmd < b.cmd; });
   for (const auto &info : jobs) {
     if (!info.etime) {
       continue;
@@ -136,8 +137,7 @@ void print_job_detail(Status_Manager sm_ro, uint32_t id) {
     std::cout << "End time: " << tz->to_local(tp) << "\n";
   }
   if (info.stat.stime) {
-    // Cheater
-    std::cout << "Run time: " << runtime << "\n";
+    std::cout << "Time run: " << runtime << "\n";
     std::cout << "TSP process pid: " << info.pid.value() << "\n";
   }
   std::cout << "Internal UUID: " << info.uuid << std::endl;
@@ -171,7 +171,7 @@ void do_action(Action a, uint32_t jobid) {
     print_job_stderr(sm_ro, jobid);
     break;
   default:
-    die_with_err("Error! Jobid supplied for action that cannot take jobid",-1);
+    die_with_err("Error! Jobid supplied for action that cannot take jobid", -1);
   }
   std::exit(EXIT_SUCCESS);
 };

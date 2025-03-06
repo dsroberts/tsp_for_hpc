@@ -53,6 +53,7 @@ int main(int argc, char *argv[]) {
   } else {
     stat.add_cmd(cmd, config.get_string("category"), config.get_int("nslots"));
   }
+  std::cout << stat.get_extern_jobid() << std::endl;
 
   auto jitter = tsp::Jitter{tsp::jitter_ms};
   std::this_thread::sleep_for(tsp::jitter_ms + jitter.get());

@@ -111,6 +111,9 @@ constexpr std::string_view
 constexpr std::string_view
     get_state_stmt("SELECT cwd,environ FROM start_state WHERE jobid = {}");
 
+constexpr std::string_view
+    get_extern_jobid_stmt("SELECT id FROM jobs WHERE uuid = '{}';");
+
 struct job_stat {
   uint32_t id;
   std::string cmd;
@@ -153,6 +156,7 @@ public:
   std::vector<job_stat> get_job_stats_by_category(char s);
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
+  uint32_t get_extern_jobid();
   std::string get_cmd_to_rerun(uint32_t id);
   prog_state get_state(uint32_t id);
   void store_state(prog_state);

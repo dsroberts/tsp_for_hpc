@@ -356,6 +356,13 @@ std::string Status_Manager::get_cmd_to_rerun(uint32_t id) {
           static_cast<size_t>(sqlite3_column_bytes(ssm.stmt, 0))};
 }
 
+uint32_t Status_Manager::get_extern_jobid() {
+  auto ssm = Sqlite_statement_manager(
+      conn_, std::format(get_extern_jobid_stmt, jobid));
+  ssm.step(true);
+  return static_cast<uint32_t>(sqlite3_column_int(ssm.stmt, 0));
+}
+
 prog_state Status_Manager::get_state(uint32_t id) {
   auto ssm = Sqlite_statement_manager(conn_, std::format(get_state_stmt, id));
   ssm.step(true);
