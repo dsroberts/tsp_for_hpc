@@ -12,23 +12,6 @@
 
 namespace tsp {
 
-std::string format_hh_mm_ss(int64_t us_duration) {
-  auto hh = us_duration / 3600000000ll;
-  auto mm = (us_duration / 60000000ll) % 60ll;
-  auto ss = (us_duration / 1000000ll) % 60ll;
-  auto us = (us_duration % 1000000ll) / 1000ll;
-
-  if (us_duration > 3599999999ll) {
-    return std::format("{:2}:{:02}:{:02}.{:03}", hh, mm, ss, us);
-  } else if (us_duration > 59999999ll) {
-    return std::format("{:2}:{:02}.{:03}", mm, ss, us);
-  } else if (us_duration > 999999ll) {
-    return std::format("{:2}.{:03}", ss, us);
-  } else {
-    return std::format("0.{:03}", us);
-  }
-}
-
 void print_job_stdout(Status_Manager sm_ro, uint32_t id) {
   auto details = sm_ro.get_job_details_by_id(id);
   if (details.stat.status) {

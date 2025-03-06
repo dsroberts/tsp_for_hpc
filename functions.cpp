@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <numeric>
@@ -67,7 +68,7 @@ std::vector<uint32_t> get_cgroup() {
   static std::string cpuset_filename("/cpuset.cpus");
 #endif
   if (!std::filesystem::exists(cgroup_fn)) {
-    die_with_err("Cgroup file for current process not found",-1);
+    die_with_err("Cgroup file for current process not found", -1);
   }
   std::string line;
   std::filesystem::path cpuset_path;
@@ -89,7 +90,7 @@ std::vector<uint32_t> get_cgroup() {
       }
     }
   } else {
-    die_with_err("Unable to open cgroup file " + cgroup_fn,-1);
+    die_with_err("Unable to open cgroup file " + cgroup_fn, -1);
   }
   // First pattern didn't work, maybe we'll have more luck if we look for
   // a blank middle segment
@@ -123,11 +124,30 @@ std::vector<uint32_t> get_cgroup() {
     return parse_cpuset_range(line);
   }
   die_with_err("Unable to open cpuset file", -1);
-  return {0,};
+  return {
+      0,
+  };
 };
 
 int64_t now() {
   return std::chrono::duration_cast<std::chrono::microseconds>(
              std::chrono::system_clock::now().time_since_epoch())
       .count();
+}
+
+std::string format_hh_mm_ss(int64_t us_duration) {
+  auto hh = us_duration / 3600000000ll;
+  auto mm = (us_duration / 60000000ll) % 60ll;
+  auto ss = (us_duration / 1000000ll) % 60ll;
+  auto us = (us_duration % 1000000ll) / 1000ll;
+
+  if (us_duration > 3599999999ll) {
+    return std::format("{:2}:{:02}:{:02}.{:03}", hh, mm, ss, us);
+  } else if (us_duration > 59999999ll) {
+    return std::format("{:2}:{:02}.{:03}", mm, ss, us);
+  } else if (us_duration > 999999ll) {
+    return std::format("{:2}.{:03}", ss, us);
+  } else {
+    return std::format("0.{:03}", us);
+  }
 }

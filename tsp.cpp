@@ -53,7 +53,8 @@ int main(int argc, char *argv[]) {
   } else {
     stat.add_cmd(cmd, config.get_string("category"), config.get_int("nslots"));
   }
-  std::cout << stat.get_extern_jobid() << std::endl;
+  auto extern_jobid = stat.get_extern_jobid();
+  std::cout << extern_jobid << std::endl;
 
   auto jitter = tsp::Jitter{tsp::jitter_ms};
   std::this_thread::sleep_for(tsp::jitter_ms + jitter.get());
@@ -134,5 +135,9 @@ int main(int argc, char *argv[]) {
 
   // Exit with status of forked process.
   stat.job_end(WEXITSTATUS(fork_stat));
+  auto job_stat = stat.get_job_by_id(extern_jobid);
+  std::cout << job_stat.cmd << " finished in "
+            << format_hh_mm_ss(job_stat.etime.value() - job_stat.stime.value())
+            << " with status " << job_stat.status.value() << std::endl;
   return WEXITSTATUS(fork_stat);
 }
