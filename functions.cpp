@@ -67,7 +67,7 @@ std::vector<uint32_t> get_cgroup() {
   static std::string cpuset_filename("/cpuset.cpus");
 #endif
   if (!std::filesystem::exists(cgroup_fn)) {
-    throw std::runtime_error("Cgroup file for current process not found");
+    die_with_err("Cgroup file for current process not found",-1);
   }
   std::string line;
   std::filesystem::path cpuset_path;
@@ -89,7 +89,7 @@ std::vector<uint32_t> get_cgroup() {
       }
     }
   } else {
-    throw std::runtime_error("Unable to open cgroup file " + cgroup_fn);
+    die_with_err("Unable to open cgroup file " + cgroup_fn,-1);
   }
   // First pattern didn't work, maybe we'll have more luck if we look for
   // a blank middle segment
@@ -115,10 +115,15 @@ std::vector<uint32_t> get_cgroup() {
   if (cpuset_file.is_open()) {
     std::getline(cpuset_file, line);
     return parse_cpuset_range(line);
-  } else {
-    throw std::runtime_error("Unable to open cpuset file " +
-                             cpuset_path.string());
   }
+  // Try the system-wide cgroup file
+  cpuset_file.open(cgroup_cpuset_path_prefix + cpuset_filename);
+  if (cpuset_file.is_open()) {
+    std::getline(cpuset_file, line);
+    return parse_cpuset_range(line);
+  }
+  die_with_err("Unable to open cpuset file", -1);
+  return {0,};
 };
 
 int64_t now() {
