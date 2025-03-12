@@ -30,6 +30,7 @@ static struct option long_options[] = {
     {"stdout", required_argument, nullptr, 'o'},
     {"stderr", required_argument, nullptr, 'e'},
     {"rerun", required_argument, nullptr, 'r'},
+    {"verbose", no_argument, nullptr, 'v'},
     {"help", no_argument, nullptr, 'h'},
     {nullptr, 0, nullptr, 0}};
 
@@ -37,7 +38,8 @@ namespace tsp {
 Config::Config(int argc, char *argv[])
     : bool_vars{{"disappear_output", false},
                 {"do_fork", true},
-                {"separate_stderr", false}},
+                {"separate_stderr", false},
+                {"verbose", false}},
       int_vars{
           {"nslots", 1},
           {"rerun", -1},
@@ -45,13 +47,13 @@ Config::Config(int argc, char *argv[])
       str_vars{} {
 
   if (argc == 1) {
-    do_action(Action::list);
+    do_action(Action::list, ListCategory::all);
   }
 
   opterr = 0;
   int c;
   int option_index;
-  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:r:", long_options,
+  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:r:v", long_options,
                           &option_index)) != -1) {
     switch (c) {
     case 'n':
@@ -70,6 +72,9 @@ Config::Config(int argc, char *argv[])
     case 'L':
       str_vars["category"] = std::string{optarg};
       break;
+    case 'v':
+      bool_vars["verbose"] = true;
+      break;
     case 'r':
       int_vars["rerun"] = std::stoul(optarg);
       break;
@@ -83,7 +88,7 @@ Config::Config(int argc, char *argv[])
       do_action(Action::stderr, std::stoul(optarg));
       break;
     case 'l':
-      do_action(Action::list);
+      do_action(Action::list, ListCategory::all);
       break;
     case 'h':
       std::cout << std::format(help, argv[0]) << std::endl;
@@ -110,13 +115,13 @@ Config::Config(int argc, char *argv[])
         do_action(Action::github_summary);
       }
       if (std::string{"list-failed"} == long_options[option_index].name) {
-        do_action(Action::list_failed);
+        do_action(Action::list, ListCategory::failed);
       }
       if (std::string{"list-queued"} == long_options[option_index].name) {
-        do_action(Action::list_queued);
+        do_action(Action::list, ListCategory::queued);
       }
       if (std::string{"list-running"} == long_options[option_index].name) {
-        do_action(Action::list_running);
+        do_action(Action::list, ListCategory::running);
       }
     }
   };

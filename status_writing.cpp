@@ -125,20 +125,11 @@ void print_job_detail(Status_Manager sm_ro, uint32_t id) {
   }
   std::cout << "Internal UUID: " << info.uuid << std::endl;
 };
-void print_all_jobs(Status_Manager sm_ro) {
-  format_jobs_table(sm_ro.get_job_stats_by_category('a'));
-};
-void print_failed_jobs(Status_Manager sm_ro) {
-  format_jobs_table(sm_ro.get_job_stats_by_category('f'));
-}
-void print_queued_jobs(Status_Manager sm_ro) {
-  format_jobs_table(sm_ro.get_job_stats_by_category('q'));
-}
-void print_running_jobs(Status_Manager sm_ro) {
-  format_jobs_table(sm_ro.get_job_stats_by_category('r'));
+void print_jobs_list(Status_Manager sm_ro, ListCategory c) {
+  format_jobs_table(sm_ro.get_job_stats_by_category(c));
 }
 void print_github_summary(Status_Manager sm_ro) {
-  format_jobs_gh_md(sm_ro.get_job_stats_by_category('a'));
+  format_jobs_gh_md(sm_ro.get_job_stats_by_category(ListCategory::all));
 };
 
 void do_action(Action a, uint32_t jobid) {
@@ -174,18 +165,20 @@ void do_action(Action a) {
   case Action::stderr:
     print_job_stderr(sm_ro, sm_ro.get_last_job_id());
     break;
+  default:
+    die_with_err("Error! 'list' action requested without a category", -1);
+  }
+  std::exit(EXIT_SUCCESS);
+}
+
+void do_action(Action a, ListCategory c) {
+  auto sm_ro = Status_Manager(false);
+  switch (a) {
   case Action::list:
-    print_all_jobs(sm_ro);
+    print_jobs_list(sm_ro, c);
     break;
-  case Action::list_failed:
-    print_failed_jobs(sm_ro);
-    break;
-  case Action::list_queued:
-    print_queued_jobs(sm_ro);
-    break;
-  case Action::list_running:
-    print_running_jobs(sm_ro);
-    break;
+  default:
+    die_with_err("Error! List category supplied for non-list action", -1);
   }
   std::exit(EXIT_SUCCESS);
 };

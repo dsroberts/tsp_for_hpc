@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "status_manager.hpp"
+
 namespace tsp {
 
 enum class Action {
@@ -10,11 +12,9 @@ enum class Action {
   stderr,
   info,
   github_summary,
-  list_failed,
-  list_queued,
-  list_running,
 };
 
 void do_action(Action a);
+void do_action(Action a, ListCategory c);
 void do_action(Action a, uint32_t jobid);
 } // namespace tsp

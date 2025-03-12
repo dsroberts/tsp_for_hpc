@@ -31,6 +31,7 @@ constexpr std::string_view help{
     "  -E, --separate-stderr  Store stdout and stderr in different files\n"
     "  -L, --label=LABEL      Add a label to the task to facilitate simpler "
     "querying\n"
+    "  -v, --verbose          Print status messages when job starts and ends\n"
     "  -r, --rerun=ID         Rerun job with id ID\n\n"
     "Job Querying Options:\n"
     "  -l, --list             Show the job list (default action)\n"

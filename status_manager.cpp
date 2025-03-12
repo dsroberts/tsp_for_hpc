@@ -77,12 +77,12 @@ void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
     }
     ssm.step();
   }
-
+  qtime = now();
   auto ssm = Sqlite_statement_manager(
       conn_,
       std::format("INSERT INTO qtime(jobid,time) SELECT id,{} FROM jobs WHERE "
                   "uuid = \"{}\";",
-                  now(), jobid),
+                  qtime, jobid),
       true);
 }
 
@@ -128,11 +128,12 @@ void Status_Manager::add_cmd(Run_cmd &cmd, uint32_t id) {
     }
     ssm.step();
   }
+  qtime = now();
   auto ssm = Sqlite_statement_manager(
       conn_,
       std::format("INSERT INTO qtime(jobid,time) SELECT id,{} FROM jobs "
                   "WHERE uuid = \"{}\";",
-                  now(), jobid),
+                  qtime, jobid),
       true);
 }
 
@@ -156,15 +157,17 @@ std::vector<pid_t> Status_Manager::get_running_job_pids(pid_t excl) {
 }
 
 void Status_Manager::job_start() {
+  stime = now();
   auto ssm = Sqlite_statement_manager(
       conn_,
       std::format("INSERT INTO stime(jobid,time) SELECT id,{} FROM jobs "
                   "WHERE uuid = \"{}\";",
-                  now(), jobid),
+                  stime, jobid),
       true);
 }
 
 void Status_Manager::job_end(int exit_stat) {
+  etime = now();
   auto ssm = Sqlite_statement_manager(
       conn_,
       std::format("INSERT INTO etime(jobid,exit_status,time) SELECT "
@@ -255,20 +258,21 @@ job_stat Status_Manager::get_job_by_id(uint32_t id) {
   return out;
 }
 
-std::vector<job_stat> Status_Manager::get_job_stats_by_category(char s) {
+std::vector<job_stat>
+Status_Manager::get_job_stats_by_category(ListCategory c) {
 
   std::string_view stmt;
-  switch (s) {
-  case 'a': // all
+  switch (c) {
+  case ListCategory::all: // all
     stmt = get_all_jobs_stmt;
     break;
-  case 'f': // failed
+  case ListCategory::failed: // failed
     stmt = get_failed_jobs_stmt;
     break;
-  case 'q': // queued
+  case ListCategory::queued: // queued
     stmt = get_queued_jobs_stmt;
     break;
-  case 'r': // running
+  case ListCategory::running: // running
     stmt = get_running_jobs_stmt;
     break;
   }

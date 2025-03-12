@@ -114,6 +114,13 @@ constexpr std::string_view
 constexpr std::string_view
     get_extern_jobid_stmt("SELECT id FROM jobs WHERE uuid = '{}';");
 
+enum class ListCategory {
+  all,
+  failed,
+  queued,
+  running
+};
+
 struct job_stat {
   uint32_t id;
   std::string cmd;
@@ -153,13 +160,16 @@ public:
   uint32_t get_last_job_id();
   job_stat get_job_by_id(uint32_t id);
   job_details get_job_details_by_id(uint32_t id);
-  std::vector<job_stat> get_job_stats_by_category(char s);
+  std::vector<job_stat> get_job_stats_by_category(ListCategory c);
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
   uint32_t get_extern_jobid();
   std::string get_cmd_to_rerun(uint32_t id);
   prog_state get_state(uint32_t id);
   void store_state(prog_state);
+  uint64_t qtime;
+  uint64_t stime;
+  uint64_t etime;
 
 private:
   sqlite3 *conn_;
