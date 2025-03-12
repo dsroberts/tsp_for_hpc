@@ -92,15 +92,13 @@ void print_job_detail(Status_Manager sm_ro, uint32_t id) {
   // broken on Gadi
   auto tz = std::chrono::current_zone();
   // Finished
-  std::string runtime;
+  std::string runtime{format_hh_mm_ss(info.stat.etime.value_or(now()) -
+                                      info.stat.stime.value_or(now()))};
   if (!info.stat.stime) {
     std::cout << "Status: Queued\n";
   } else if (!info.stat.etime) {
-    runtime = format_hh_mm_ss(now() - info.stat.stime.value());
     std::cout << "Status: Running\n";
   } else {
-    runtime =
-        format_hh_mm_ss(info.stat.etime.value() - info.stat.stime.value());
     std::cout << "Status: Finished with exit status "
               << info.stat.status.value() << "\n";
   }
@@ -132,6 +130,27 @@ void print_github_summary(Status_Manager sm_ro) {
   format_jobs_gh_md(sm_ro.get_job_stats_by_category(ListCategory::all));
 };
 
+void print_time(Status_Manager sm_ro, TimeCategory c, uint32_t jobid) {
+  auto stat = sm_ro.get_job_by_id(jobid);
+  switch (c) {
+  case TimeCategory::queue:
+    std::cout << format_hh_mm_ss(stat.stime.value_or(now()) - stat.qtime);
+    break;
+  case TimeCategory::run:
+    if (stat.stime) {
+      std::cout << format_hh_mm_ss(stat.etime.value_or(now()) -
+                                   stat.stime.value());
+    } else {
+      std::cout << "0.000";
+    }
+    break;
+  case TimeCategory::total:
+    std::cout << format_hh_mm_ss(stat.etime.value_or(now()) - stat.qtime);
+    break;
+  }
+  std::cout << std::endl;
+}
+
 void do_action(Action a, uint32_t jobid) {
   auto sm_ro = Status_Manager(false);
   switch (a) {
@@ -157,13 +176,9 @@ void do_action(Action a) {
     print_github_summary(sm_ro);
     break;
   case Action::info:
-    print_job_detail(sm_ro, sm_ro.get_last_job_id());
-    break;
   case Action::stdout:
-    print_job_stdout(sm_ro, sm_ro.get_last_job_id());
-    break;
   case Action::stderr:
-    print_job_stderr(sm_ro, sm_ro.get_last_job_id());
+    do_action(a, sm_ro.get_last_job_id());
     break;
   default:
     die_with_err("Error! 'list' action requested without a category", -1);
@@ -181,5 +196,22 @@ void do_action(Action a, ListCategory c) {
     die_with_err("Error! List category supplied for non-list action", -1);
   }
   std::exit(EXIT_SUCCESS);
+};
+
+void do_action(Action a, TimeCategory c, uint32_t jobid) {
+  auto sm_ro = Status_Manager(false);
+  switch (a) {
+  case Action::print_time:
+    print_time(sm_ro, c, jobid);
+    break;
+  default:
+    die_with_err("Error! Time category supplied for non-print_time action", -1);
+  }
+  std::exit(EXIT_SUCCESS);
+};
+
+void do_action(Action a, TimeCategory c) {
+  auto sm_ro = Status_Manager(false);
+  do_action(a, c, sm_ro.get_last_job_id());
 };
 } // namespace tsp

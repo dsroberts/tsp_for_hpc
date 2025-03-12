@@ -27,6 +27,9 @@ static struct option long_options[] = {
     {"list-failed", no_argument, nullptr, 0},
     {"list-queued", no_argument, nullptr, 0},
     {"list-running", no_argument, nullptr, 0},
+    {"print-queue-time", required_argument, nullptr, 1},
+    {"print-run-time", required_argument, nullptr, 2},
+    {"print-total-time", required_argument, nullptr, 3},
     {"stdout", required_argument, nullptr, 'o'},
     {"stderr", required_argument, nullptr, 'e'},
     {"rerun", required_argument, nullptr, 'r'},
@@ -105,6 +108,15 @@ Config::Config(int argc, char *argv[])
       case 'e':
         do_action(Action::stderr);
         break;
+      case 1:
+        do_action(Action::print_time, TimeCategory::queue);
+        break;
+      case 2:
+        do_action(Action::print_time, TimeCategory::run);
+        break;
+      case 3:
+        do_action(Action::print_time, TimeCategory::total);
+        break;
       }
     case 0:
       if (std::string{"db-path"} == long_options[option_index].name) {
@@ -123,6 +135,16 @@ Config::Config(int argc, char *argv[])
       if (std::string{"list-running"} == long_options[option_index].name) {
         do_action(Action::list, ListCategory::running);
       }
+      break;
+    case 1:
+      do_action(Action::print_time, TimeCategory::queue, std::stoul(optarg));
+      break;
+    case 2:
+      do_action(Action::print_time, TimeCategory::run, std::stoul(optarg));
+      break;
+    case 3:
+      do_action(Action::print_time, TimeCategory::total, std::stoul(optarg));
+      break;
     }
   };
 }

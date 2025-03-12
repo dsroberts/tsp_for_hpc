@@ -142,11 +142,11 @@ std::string format_hh_mm_ss(int64_t us_duration) {
   auto us = (us_duration % 1000000ll) / 1000ll;
 
   if (us_duration > 3599999999ll) {
-    return std::format("{:2}:{:02}:{:02}.{:03}", hh, mm, ss, us);
+    return std::format("{}:{:02}:{:02}.{:03}", hh, mm, ss, us);
   } else if (us_duration > 59999999ll) {
-    return std::format("{:2}:{:02}.{:03}", mm, ss, us);
+    return std::format("{}:{:02}.{:03}", mm, ss, us);
   } else if (us_duration > 999999ll) {
-    return std::format("{:2}.{:03}", ss, us);
+    return std::format("{}.{:03}", ss, us);
   } else {
     return std::format("0.{:03}", us);
   }

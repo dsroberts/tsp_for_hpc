@@ -74,14 +74,14 @@ int main(int argc, char *argv[]) {
     stat.job_start();
     bound_cores = binder.bind();
     if (config.get_bool("verbose")) {
-      std::cout << cmd.print() << " has started. Job was queued for "
+      std::cout << "Job id " << extern_jobid << ": " << cmd.print()
+                << "has started. Job was queued for "
                 << format_hh_mm_ss(stat.stime - stat.qtime)
                 << "\n Job is bound to physical CPU cores: ";
-      for (auto &c : bound_cores) {
-        std::cout << c;
+      for (const auto &c : bound_cores) {
+        std::cout << c << ", ";
       }
       std::cout << std::endl;
-      std::cout << stat.stime << " " << stat.qtime << std::endl;
     }
   }
 
@@ -146,9 +146,9 @@ int main(int argc, char *argv[]) {
   // Exit with status of forked process.
   stat.job_end(WEXITSTATUS(fork_stat));
   if (config.get_bool("verbose")) {
-    std::cout << cmd.print() << " finished in "
-              << format_hh_mm_ss(stat.etime - stat.stime) << " with status "
-              << fork_stat << std::endl;
+    std::cout << "Job id " << extern_jobid << ": " << cmd.print()
+              << "finished in " << format_hh_mm_ss(stat.etime - stat.stime)
+              << " with status " << fork_stat << std::endl;
   }
   return WEXITSTATUS(fork_stat);
 }
