@@ -73,82 +73,67 @@ int main(int argc, char *argv[]) {
     }
     stat.job_start();
     bound_cores = binder.bind();
-    if (config.get_bool("verbose")) {
-      std::cout << "Job id " << extern_jobid << ": " << cmd.print()
-                << "has started. Job was queued for "
-                << format_hh_mm_ss(stat.stime - stat.qtime)
-                << "\n Job is bound to physical CPU cores: ";
-      for (const auto &c : bound_cores) {
-        std::cout << c << ", ";
-      }
-      std::cout << std::endl;
+  }
+
+  if (config.get_bool("verbose")) {
+    std::cout << "Job id " << extern_jobid << ": " << cmd.print()
+              << "has started. Job was queued for "
+              << format_hh_mm_ss(stat.stime - stat.qtime)
+              << "\n Job is bound to physical CPU cores: ";
+    for (const auto &c : bound_cores) {
+      std::cout << c << ", ";
     }
+    std::cout << std::endl;
   }
 
   if (cmd.is_openmpi) {
     cmd.add_rankfile(bound_cores, config.get_int("nslots"));
   }
 
-  pid_t fork_pid;
-  int fork_stat;
-  // exec & monitor here.
-  if (0 == (fork_pid = fork())) {
-    // We are now init, so fork again, and wait in a loop until it returns
-    // ECHILD
-    if (rerun) {
-      const auto ps = stat.get_state(config.get_int("rerun"));
-      std::filesystem::current_path(ps.wd);
-      environ = ps.env_ptrs;
-    }
-    stat.store_state({environ, std::filesystem::current_path(), {}});
+  if (rerun) {
+    const auto ps = stat.get_state(config.get_int("rerun"));
+    std::filesystem::current_path(ps.wd);
+    environ = ps.env_ptrs;
+  }
+  stat.store_state({environ, std::filesystem::current_path(), {}});
 
-    int child_stat;
-    int ret;
-    pid_t waited_on_pid;
-    auto handler = tsp::Output_handler(config.get_bool("disappear_output"),
-                                       config.get_bool("separate_stderr"),
-                                       stat.jobid, true);
-    if (0 == (waited_on_pid = fork())) {
-      if (cmd.is_openmpi) {
-        setenv("OMPI_MCA_rmaps_base_mapping_policy", "", 1);
-        setenv("OMPI_MCA_rmaps_rank_file_physical", "true", 1);
-      }
-      handler.init_pipes();
-      ret = execvp(cmd.get_argv_0(), cmd.get_argv());
-      if (ret != 0) {
-        die_with_err("Error: could not exec " + std::string(cmd.get_argv_0()),
-                     ret);
-      }
+  int child_stat;
+  int ret;
+  pid_t waited_on_pid;
+  auto handler =
+      tsp::Output_handler(config.get_bool("disappear_output"),
+                          config.get_bool("separate_stderr"), stat.jobid, true);
+  if (0 == (waited_on_pid = fork())) {
+    if (cmd.is_openmpi) {
+      setenv("OMPI_MCA_rmaps_base_mapping_policy", "", 1);
+      setenv("OMPI_MCA_rmaps_rank_file_physical", "true", 1);
     }
-    if (waited_on_pid == -1) {
-      die_with_err("Error: could not fork init subprocess", waited_on_pid);
+    handler.init_pipes();
+    ret = execvp(cmd.get_argv_0(), cmd.get_argv());
+    if (ret != 0) {
+      die_with_err("Error: could not exec " + std::string(cmd.get_argv_0()),
+                   ret);
     }
-    for (;;) {
-      pid_t ret_pid = waitpid(-1, &child_stat, 0);
-      if (ret_pid < 0) {
-        if (errno == ECHILD) {
-          break;
-        }
+  }
+  if (waited_on_pid == -1) {
+    die_with_err("Error: could not fork subprocess to exec", waited_on_pid);
+  }
+  for (;;) {
+    pid_t ret_pid = waitpid(-1, &child_stat, 0);
+    if (ret_pid < 0) {
+      if (errno == ECHILD) {
+        break;
       }
     }
-    stat.save_output(handler.get_output());
-    return WEXITSTATUS(child_stat);
   }
-  if (fork_pid == -1) {
-    die_with_err("Error: could not fork into new pid namespace", fork_pid);
-  }
+  stat.save_output(handler.get_output());
+  stat.job_end(WEXITSTATUS(child_stat));
 
-  pid_t ret_pid = waitpid(fork_pid, &fork_stat, 0);
-  if (ret_pid == -1) {
-    die_with_err("Error: failed to wait for forked process", ret_pid);
-  }
-
-  // Exit with status of forked process.
-  stat.job_end(WEXITSTATUS(fork_stat));
   if (config.get_bool("verbose")) {
     std::cout << "Job id " << extern_jobid << ": " << cmd.print()
               << "finished in " << format_hh_mm_ss(stat.etime - stat.stime)
-              << " with status " << fork_stat << std::endl;
+              << " with status " << WEXITSTATUS(child_stat) << std::endl;
   }
-  return WEXITSTATUS(fork_stat);
+
+  return WEXITSTATUS(child_stat);
 }
