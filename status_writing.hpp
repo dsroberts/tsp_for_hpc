@@ -21,9 +21,9 @@ enum class Action {
   github_summary,
 };
 
-void do_action(Action a);
-void do_action(Action a, ListCategory c);
-void do_action(Action a, uint32_t jobid);
-void do_action(Action a, TimeCategory c);
-void do_action(Action a, TimeCategory c, uint32_t jobid);
+int do_writer_action(Action a);
+int do_writer_action(Action a, ListCategory c);
+int do_writer_action(Action a, uint32_t jobid);
+int do_writer_action(Action a, TimeCategory c);
+int do_writer_action(Action a, TimeCategory c, uint32_t jobid);
 } // namespace tsp

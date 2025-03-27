@@ -41,7 +41,18 @@ Status_Manager::Status_Manager(bool rw)
   }
 }
 Status_Manager::Status_Manager() : Status_Manager(true) {};
-Status_Manager::~Status_Manager() { sqlite3_close_v2(conn_); }
+Status_Manager::~Status_Manager() {
+  // Only when in rw mode
+  if (total_slots_ != 0) {
+    if (!started) {
+      job_start();
+    }
+    if (!finished) {
+      job_end(-99);
+    }
+  }
+  sqlite3_close_v2(conn_);
+}
 
 void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
                              int32_t slots) {
@@ -164,6 +175,7 @@ void Status_Manager::job_start() {
                   "WHERE uuid = \"{}\";",
                   stime, jobid),
       true);
+  started = true;
 }
 
 void Status_Manager::job_end(int exit_stat) {
@@ -174,6 +186,7 @@ void Status_Manager::job_end(int exit_stat) {
                   "id,{},{} FROM jobs WHERE uuid= \"{}\";",
                   exit_stat, now(), jobid),
       true);
+  finished = true;
 }
 
 void Status_Manager::save_output(

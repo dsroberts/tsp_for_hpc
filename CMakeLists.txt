@@ -15,7 +15,7 @@ if(CGROUPV2)
 endif(CGROUPV2)
 
 set(sources
-    config.cpp
+    parse_args.cpp
     locker.cpp
     functions.cpp
     jitter.cpp
@@ -25,6 +25,7 @@ set(sources
     status_writing.cpp
     output_manager.cpp
     proc_affinity.cpp
+    spooler.cpp
     tsp.cpp)
 
 add_executable(tsp-hpc ${sources})

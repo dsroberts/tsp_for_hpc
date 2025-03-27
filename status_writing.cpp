@@ -151,7 +151,7 @@ void print_time(Status_Manager sm_ro, TimeCategory c, uint32_t jobid) {
   std::cout << std::endl;
 }
 
-void do_action(Action a, uint32_t jobid) {
+int do_writer_action(Action a, uint32_t jobid) {
   auto sm_ro = Status_Manager(false);
   switch (a) {
   case Action::info:
@@ -166,10 +166,10 @@ void do_action(Action a, uint32_t jobid) {
   default:
     die_with_err("Error! Jobid supplied for action that cannot take jobid", -1);
   }
-  std::exit(EXIT_SUCCESS);
+  return EXIT_SUCCESS;
 };
 
-void do_action(Action a) {
+int do_writer_action(Action a) {
   auto sm_ro = Status_Manager(false);
   switch (a) {
   case Action::github_summary:
@@ -178,15 +178,15 @@ void do_action(Action a) {
   case Action::info:
   case Action::stdout:
   case Action::stderr:
-    do_action(a, sm_ro.get_last_job_id());
+    return do_writer_action(a, sm_ro.get_last_job_id());
     break;
   default:
     die_with_err("Error! 'list' action requested without a category", -1);
   }
-  std::exit(EXIT_SUCCESS);
+  return EXIT_SUCCESS;
 }
 
-void do_action(Action a, ListCategory c) {
+int do_writer_action(Action a, ListCategory c) {
   auto sm_ro = Status_Manager(false);
   switch (a) {
   case Action::list:
@@ -195,10 +195,10 @@ void do_action(Action a, ListCategory c) {
   default:
     die_with_err("Error! List category supplied for non-list action", -1);
   }
-  std::exit(EXIT_SUCCESS);
+  return EXIT_SUCCESS;
 };
 
-void do_action(Action a, TimeCategory c, uint32_t jobid) {
+int do_writer_action(Action a, TimeCategory c, uint32_t jobid) {
   auto sm_ro = Status_Manager(false);
   switch (a) {
   case Action::print_time:
@@ -207,11 +207,11 @@ void do_action(Action a, TimeCategory c, uint32_t jobid) {
   default:
     die_with_err("Error! Time category supplied for non-print_time action", -1);
   }
-  std::exit(EXIT_SUCCESS);
+  return EXIT_SUCCESS;
 };
 
-void do_action(Action a, TimeCategory c) {
+int do_writer_action(Action a, TimeCategory c) {
   auto sm_ro = Status_Manager(false);
-  do_action(a, c, sm_ro.get_last_job_id());
+  return do_writer_action(a, c, sm_ro.get_last_job_id());
 };
 } // namespace tsp

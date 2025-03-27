@@ -4,7 +4,11 @@
 #include <map>
 #include <string>
 
+#include <getopt.h>
+#include <unistd.h>
+
 namespace tsp {
+
 constexpr std::string_view help{
     "  == TSP: Task Spooler for HPC == \n"
     " A topology-aware serverless task spooler. tsp detects other TSP "
@@ -41,11 +45,13 @@ constexpr std::string_view help{
     "      --print-queue-time=[ID]\n"
     "      --print-run-time=[ID]\n"
     "      --print-total-time=[ID]\n"
-    "                         Show the queue/run/total (queue+run) time of job [ID].\n"
+    "                         Show the queue/run/total (queue+run) time of job "
+    "[ID].\n"
     "                         (latest if ID is omitted)\n"
     "  -i, --info=[ID]        Show detailed info for job [ID] (latest if ID is "
     "omitted)\n"
-    "  -o, --stdout=[ID]      Display the output of the job [ID] (latest if ID \n"
+    "  -o, --stdout=[ID]      Display the output of the job [ID] (latest if ID "
+    "\n"
     "                         is omitted)\n"
     "  -e, --stderr=[ID]      If -E was provided, display the error file of \n"
     "                         the job [ID] (latest if ID is omitted)\n"
@@ -53,16 +59,5 @@ constexpr std::string_view help{
     "      --gh-summary       Output summary info for github actions\n\n"
     "Other Options:\n"
     "  -h, --help    display this help and exit\n"};
-class Config {
-public:
-  Config(int argc, char *argv[]);
-  int32_t get_int(std::string key);
-  std::string get_string(std::string key);
-  bool get_bool(std::string key);
-
-private:
-  std::map<std::string, bool> bool_vars{};
-  std::map<std::string, std::int32_t> int_vars{};
-  std::map<std::string, std::string> str_vars{};
-};
+int parse_args(int argc, char *argv[]);
 } // namespace tsp

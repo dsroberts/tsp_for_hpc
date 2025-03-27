@@ -176,5 +176,7 @@ private:
   int32_t slots_req_;
   const int32_t total_slots_;
   std::string gen_jobid();
+  bool started;
+  bool finished;
 };
 } // namespace tsp
