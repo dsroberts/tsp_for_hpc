@@ -5,9 +5,11 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <thread>
+
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <thread>
 #include <unistd.h>
 
 #include "functions.hpp"
@@ -17,6 +19,27 @@
 #include "parse_args.hpp"
 #include "proc_affinity.hpp"
 #include "status_manager.hpp"
+
+bool time_to_die = false;
+int seen_signal = 0;
+
+void sigintHandlerPostFork(int sig) {
+  // disable this signal for us
+  signal(sig, SIG_IGN);
+  // pass it on - we can clean up when
+  // all child processes have exited
+  kill(0, sig);
+}
+
+void sigintHandlerPreFork(int sig) {
+  // Ensure the database is updated to reflect
+  // we're no longer in the queue if we're killed
+  // before launching our process
+  time_to_die = true;
+  seen_signal = sig;
+}
+
+auto signals_to_forward = {SIGINT, SIGHUP, SIGTERM};
 
 namespace tsp {
 
@@ -77,6 +100,9 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
   } else {
     stat.add_cmd(cmd, config.get_string("category"), config.get_int("nslots"));
   }
+  for (const auto sig : signals_to_forward) {
+    signal(sig, sigintHandlerPreFork);
+  }
   auto extern_jobid = stat.get_extern_jobid();
   std::cout << extern_jobid << std::endl;
 
@@ -88,6 +114,11 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
   {
     auto locker = tsp::Locker();
     for (;;) {
+      if (time_to_die) {
+        stat.job_start();
+        stat.job_end(128 + seen_signal);
+        std::exit(EXIT_FAILURE);
+      }
       locker.lock();
       if (stat.allowed_to_run()) {
         break;
@@ -127,6 +158,11 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
   auto handler =
       tsp::Output_handler(config.get_bool("disappear_output"),
                           config.get_bool("separate_stderr"), stat.jobid, true);
+  // Might have been signalled between start and here
+  if (time_to_die) {
+    stat.job_end(128 + seen_signal);
+    std::exit(EXIT_FAILURE);
+  }
   if (0 == (waited_on_pid = fork())) {
     if (cmd.is_openmpi) {
       setenv("OMPI_MCA_rmaps_base_mapping_policy", "", 1);
@@ -142,6 +178,9 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
   if (waited_on_pid == -1) {
     die_with_err("Error: could not fork subprocess to exec", waited_on_pid);
   }
+  for (const auto sig : signals_to_forward) {
+    signal(sig, sigintHandlerPostFork);
+  }
   for (;;) {
     pid_t ret_pid = waitpid(-1, &child_stat, 0);
     if (ret_pid < 0) {
@@ -151,7 +190,15 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     }
   }
   stat.save_output(handler.get_output());
-  stat.job_end(WEXITSTATUS(child_stat));
+  int child_exit_stat = -1;
+  if (WIFEXITED(child_stat)) {
+    child_exit_stat = WEXITSTATUS(child_stat);
+  } else if (WIFSIGNALED(child_stat)) {
+    // PBSPro convention - status = 128 + signal
+    child_exit_stat = 128 + WTERMSIG(child_stat);
+  }
+
+  stat.job_end(child_exit_stat);
 
   if (config.get_bool("verbose")) {
     std::cout << "Job id " << extern_jobid << ": " << cmd.print()

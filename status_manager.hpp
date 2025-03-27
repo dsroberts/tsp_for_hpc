@@ -94,6 +94,10 @@ constexpr std::string_view get_queued_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
     "FROM job_details WHERE stime IS NULL\0");
 
+constexpr std::string_view get_finished_jobs_stmt(
+    "SELECT id,command,category,qtime,stime,etime,exit_status "
+    "FROM job_details WHERE exit_status IS NOT NULL\0");
+
 constexpr std::string_view get_running_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
     "FROM job_details WHERE stime IS NOT NULL AND etime IS NULL\0");
@@ -114,12 +118,7 @@ constexpr std::string_view
 constexpr std::string_view
     get_extern_jobid_stmt("SELECT id FROM jobs WHERE uuid = '{}';");
 
-enum class ListCategory {
-  all,
-  failed,
-  queued,
-  running
-};
+enum class ListCategory { all, failed, queued, running, finished };
 
 struct job_stat {
   uint32_t id;

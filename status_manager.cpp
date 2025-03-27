@@ -41,18 +41,7 @@ Status_Manager::Status_Manager(bool rw)
   }
 }
 Status_Manager::Status_Manager() : Status_Manager(true) {};
-Status_Manager::~Status_Manager() {
-  // Only when in rw mode
-  if (total_slots_ != 0) {
-    if (!started) {
-      job_start();
-    }
-    if (!finished) {
-      job_end(-99);
-    }
-  }
-  sqlite3_close_v2(conn_);
-}
+Status_Manager::~Status_Manager() { sqlite3_close_v2(conn_); }
 
 void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
                              int32_t slots) {
@@ -287,6 +276,9 @@ Status_Manager::get_job_stats_by_category(ListCategory c) {
     break;
   case ListCategory::running: // running
     stmt = get_running_jobs_stmt;
+    break;
+  case ListCategory::finished: // finished
+    stmt = get_finished_jobs_stmt;
     break;
   }
   auto ssm = Sqlite_statement_manager(conn_, stmt);

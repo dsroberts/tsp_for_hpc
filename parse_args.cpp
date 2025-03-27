@@ -28,6 +28,7 @@ static struct option long_options[] = {
     {"list-failed", no_argument, nullptr, 0},
     {"list-queued", no_argument, nullptr, 0},
     {"list-running", no_argument, nullptr, 0},
+    {"list-finished", no_argument, nullptr, 0},
     {"print-queue-time", required_argument, nullptr, 1},
     {"print-run-time", required_argument, nullptr, 2},
     {"print-total-time", required_argument, nullptr, 3},
@@ -111,6 +112,11 @@ int parse_args(int argc, char *argv[]) {
       case 3:
         return do_writer_action(Action::print_time, TimeCategory::total);
         break;
+      default:
+        std::cout << "Unknown option: " << argv[optind - 1] << std::endl;
+        std::cout << std::format(help, argv[0]) << std::endl;
+        return EXIT_FAILURE;
+        break;
       }
     case 0:
       if (std::string{"db-path"} == long_options[option_index].name) {
@@ -128,6 +134,9 @@ int parse_args(int argc, char *argv[]) {
       }
       if (std::string{"list-running"} == long_options[option_index].name) {
         return do_writer_action(Action::list, ListCategory::running);
+      }
+      if (std::string{"list-finished"} == long_options[option_index].name) {
+        return do_writer_action(Action::list, ListCategory::finished);
       }
       break;
     case 1:
