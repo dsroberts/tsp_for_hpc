@@ -1,11 +1,6 @@
 #pragma once
 
-#include <cstdint>
-#include <map>
 #include <string>
-
-#include <getopt.h>
-#include <unistd.h>
 
 namespace tsp {
 
@@ -59,5 +54,4 @@ constexpr std::string_view help{
     "      --gh-summary       Output summary info for github actions\n\n"
     "Other Options:\n"
     "  -h, --help    display this help and exit\n"};
-int parse_args(int argc, char *argv[]);
 } // namespace tsp

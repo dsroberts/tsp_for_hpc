@@ -13,10 +13,10 @@
 #include <unistd.h>
 
 #include "functions.hpp"
+#include "help.hpp"
 #include "jitter.hpp"
 #include "locker.hpp"
 #include "output_manager.hpp"
-#include "parse_args.hpp"
 #include "proc_affinity.hpp"
 #include "status_manager.hpp"
 

@@ -15,7 +15,6 @@ if(CGROUPV2)
 endif(CGROUPV2)
 
 set(sources
-    parse_args.cpp
     locker.cpp
     functions.cpp
     jitter.cpp
