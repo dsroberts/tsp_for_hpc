@@ -13,6 +13,7 @@
 #include "spooler.hpp"
 #include "status_manager.hpp"
 #include "status_writing.hpp"
+#include "timeout.hpp"
 
 namespace tsp {
 
@@ -39,6 +40,10 @@ static struct option long_options[] = {
     {"stderr", required_argument, nullptr, 'e'},
     {"rerun", required_argument, nullptr, 'r'},
     {"verbose", no_argument, nullptr, 'v'},
+    {"timeout", no_argument, nullptr, 0},
+    {"polling-interval", required_argument, nullptr, 'p'},
+    {"idle-timeout", required_argument, nullptr, 'I'},
+    {"job-timeout", required_argument, nullptr, 'T'},
     {"help", no_argument, nullptr, 'h'},
     {nullptr, 0, nullptr, 0}};
 
@@ -53,11 +58,12 @@ int main(int argc, char *argv[]) {
   }
 
   auto sp_conf = tsp::Spooler_config();
+  auto timeout_conf = tsp::Timeout_config();
 
   opterr = 0;
   int c;
   int option_index;
-  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:r:v", tsp::long_options,
+  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:r:vT:I:p:", tsp::long_options,
                           &option_index)) != -1) {
     switch (c) {
     case 'n':
@@ -66,6 +72,7 @@ int main(int argc, char *argv[]) {
       break;
     case 'f':
       sp_conf.set_bool("do_fork", false);
+      timeout_conf.set_bool("do_fork", false);
       break;
     case 'N':
       sp_conf.set_int("nslots", std::stoul(optarg));
@@ -78,6 +85,7 @@ int main(int argc, char *argv[]) {
       break;
     case 'v':
       sp_conf.set_bool("verbose", true);
+      timeout_conf.set_bool("verbose", true);
       break;
     case 'r':
       sp_conf.set_int("rerun", std::stoul(optarg));
@@ -93,6 +101,15 @@ int main(int argc, char *argv[]) {
       break;
     case 'l':
       return tsp::do_writer_action(tsp::Action::list, tsp::ListCategory::all);
+      break;
+    case 'p':
+      timeout_conf.set_int("polling_interval", std::stoul(optarg));
+      break;
+    case 'I':
+      timeout_conf.set_int("idle_timeout", std::stoul(optarg));
+      break;
+    case 'T':
+      timeout_conf.set_int("job_timeout", std::stoul(optarg));
       break;
     case 'h':
       std::cout << std::format(tsp::help, argv[0]) << std::endl;
@@ -147,9 +164,13 @@ int main(int argc, char *argv[]) {
         return tsp::do_writer_action(tsp::Action::list,
                                      tsp::ListCategory::running);
       }
-      if (std::string{"list-finished"} == tsp::long_options[option_index].name) {
+      if (std::string{"list-finished"} ==
+          tsp::long_options[option_index].name) {
         return tsp::do_writer_action(tsp::Action::list,
                                      tsp::ListCategory::finished);
+      }
+      if (std::string{"timeout"} == tsp::long_options[option_index].name) {
+        prog = tsp::TSPProgram::timeout;
       }
       break;
     case 1:
@@ -168,15 +189,13 @@ int main(int argc, char *argv[]) {
       break;
     }
   };
-  
-  switch(prog) {
+
+  switch (prog) {
   case tsp::TSPProgram::spooler:
-    return do_spooler(sp_conf, argc, optind, argv);
+    return tsp::do_spooler(sp_conf, argc, optind, argv);
     break;
   case tsp::TSPProgram::timeout:
-    std::cout << "Soon..." << std::endl;
-    return EXIT_SUCCESS;
+    return tsp::do_timeout(timeout_conf);
     break;
   }
-  
 }

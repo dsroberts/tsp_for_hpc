@@ -146,6 +146,7 @@ struct prog_state {
 class Status_Manager {
 public:
   const std::string jobid;
+  Status_Manager(bool rw, bool open_can_fail);
   Status_Manager(bool rw);
   Status_Manager();
   ~Status_Manager();
@@ -171,11 +172,16 @@ public:
   uint64_t etime;
 
 private:
-  sqlite3 *conn_;
+  sqlite3 *conn_ = nullptr;
   int32_t slots_req_;
+  const bool rw_;
+  const bool die_on_open_fail_;
   const int32_t total_slots_;
   std::string gen_jobid();
+  void open_db();
   bool started;
   bool finished;
+
+  int db_open_flags_;
 };
 } // namespace tsp

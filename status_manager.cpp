@@ -17,34 +17,60 @@
 
 namespace tsp {
 
-Status_Manager::Status_Manager(bool rw)
-    : jobid(rw ? gen_jobid() : ""), total_slots_(rw ? get_cgroup().size() : 0) {
+Status_Manager::Status_Manager(bool rw, bool die_on_open_fail)
+    : jobid(rw ? gen_jobid() : ""), rw_(rw),
+      die_on_open_fail_(die_on_open_fail),
+      total_slots_(rw ? get_cgroup().size() : 0) {
+  if (rw && !die_on_open_fail) {
+    die_with_err(
+        "Not allowed to continue through open failure when in read-write mode",
+        -1);
+  }
+  open_db();
+}
+Status_Manager::Status_Manager(bool rw) : Status_Manager(rw, true) {};
+Status_Manager::Status_Manager() : Status_Manager(true, true) {};
+Status_Manager::~Status_Manager() {
+  if (conn_) {
+    sqlite3_close_v2(conn_);
+  }
+}
+
+void Status_Manager::open_db() {
   auto stat_fn = get_tmp() / db_name;
   int sqlite_ret;
-  if ((sqlite_ret = sqlite3_open_v2(stat_fn.c_str(), &conn_,
-                                    SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
-                                        SQLITE_OPEN_FULLMUTEX,
+  db_open_flags_ = SQLITE_OPEN_FULLMUTEX;
+  if (rw_) {
+    db_open_flags_ |= (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
+  } else {
+    db_open_flags_ |= SQLITE_OPEN_READONLY;
+  }
+  if ((sqlite_ret = sqlite3_open_v2(stat_fn.c_str(), &conn_, db_open_flags_,
                                     nullptr)) != SQLITE_OK) {
-    die_with_err("Unable to open database", sqlite_ret);
+    if (die_on_open_fail_) {
+      die_with_err("Unable to open database", sqlite_ret);
+    } else {
+      conn_ = nullptr;
+      return;
+    }
   }
   // Wait a long time if we have to
   if ((sqlite_ret = sqlite3_busy_timeout(conn_, 10000)) != SQLITE_OK) {
     die_with_err("Unable to set busy timeout", sqlite_ret);
   }
-  if (rw) {
-    char *sqlite_err;
-    // Use exec here as db_initialise contains many statements.
-    if ((sqlite_ret = sqlite3_exec(conn_, db_initialise.data(), nullptr,
-                                   nullptr, &sqlite_err)) != SQLITE_OK) {
-      exit_with_sqlite_err(sqlite_err, db_initialise, sqlite_ret, conn_);
-    }
+  char *sqlite_err;
+  // Use exec here as db_initialise contains many statements.
+  if ((sqlite_ret = sqlite3_exec(conn_, db_initialise.data(), nullptr, nullptr,
+                                 &sqlite_err)) != SQLITE_OK) {
+    exit_with_sqlite_err(sqlite_err, db_initialise, sqlite_ret, conn_);
   }
 }
-Status_Manager::Status_Manager() : Status_Manager(true) {};
-Status_Manager::~Status_Manager() { sqlite3_close_v2(conn_); }
 
 void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
                              int32_t slots) {
+  if (!rw_) {
+    die_with_err("Attempted to write to database in read-only mode!", -1);
+  }
   slots_req_ = slots;
   int sqlite_ret;
   {
@@ -87,6 +113,9 @@ void Status_Manager::add_cmd(Run_cmd &cmd, std::string category,
 }
 
 void Status_Manager::add_cmd(Run_cmd &cmd, uint32_t id) {
+  if (!rw_) {
+    die_with_err("Attempted to write to database in read-only mode!", -1);
+  }
   std::string category;
   {
     auto ssm = Sqlite_statement_manager(
@@ -137,26 +166,10 @@ void Status_Manager::add_cmd(Run_cmd &cmd, uint32_t id) {
       true);
 }
 
-bool Status_Manager::allowed_to_run() {
-  int32_t slots_used;
-  auto ssm = Sqlite_statement_manager(conn_, "SELECT s FROM used_slots;");
-  ssm.step(true);
-  slots_used = sqlite3_column_int(ssm.stmt, 0);
-  return (total_slots_ - slots_used) >= slots_req_;
-}
-
-std::vector<pid_t> Status_Manager::get_running_job_pids(pid_t excl) {
-  std::vector<pid_t> out;
-  auto ssm = Sqlite_statement_manager(
-      conn_,
-      std::format("SELECT pid FROM sibling_pids WHERE pid != {};", excl));
-  while (ssm.step() != SQLITE_DONE) {
-    out.push_back(static_cast<pid_t>(sqlite3_column_int(ssm.stmt, 0)));
-  }
-  return out;
-}
-
 void Status_Manager::job_start() {
+  if (!rw_) {
+    die_with_err("Attempted to write to database in read-only mode!", -1);
+  }
   stime = now();
   auto ssm = Sqlite_statement_manager(
       conn_,
@@ -168,6 +181,9 @@ void Status_Manager::job_start() {
 }
 
 void Status_Manager::job_end(int exit_stat) {
+  if (!rw_) {
+    die_with_err("Attempted to write to database in read-only mode!", -1);
+  }
   etime = now();
   auto ssm = Sqlite_statement_manager(
       conn_,
@@ -180,6 +196,9 @@ void Status_Manager::job_end(int exit_stat) {
 
 void Status_Manager::save_output(
     const std::pair<std::string, std::string> &in) {
+  if (!rw_) {
+    die_with_err("Attempted to write to database in read-only mode!", -1);
+  }
   auto ssm = Sqlite_statement_manager(conn_, insert_output_stmt);
   int sqlite_ret;
   if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 1, jobid.c_str(), -1,
@@ -198,6 +217,9 @@ void Status_Manager::save_output(
 }
 
 void Status_Manager::store_state(prog_state ps) {
+  if (!rw_) {
+    die_with_err("Attempted to write to database in read-only mode!", -1);
+  }
   auto ssm = Sqlite_statement_manager(conn_, insert_start_state_stmt);
   int sqlite_ret;
   if ((sqlite_ret = sqlite3_bind_text(ssm.stmt, 1, jobid.c_str(), -1,
@@ -225,13 +247,56 @@ void Status_Manager::store_state(prog_state ps) {
 /*
 Read-only functions
 */
+bool Status_Manager::allowed_to_run() {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
+  int32_t slots_used;
+  auto ssm = Sqlite_statement_manager(conn_, "SELECT s FROM used_slots;");
+  ssm.step(true);
+  slots_used = sqlite3_column_int(ssm.stmt, 0);
+  return (total_slots_ - slots_used) >= slots_req_;
+}
+
+std::vector<pid_t> Status_Manager::get_running_job_pids(pid_t excl) {
+  std::vector<pid_t> out;
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
+  auto ssm = Sqlite_statement_manager(
+      conn_,
+      std::format("SELECT pid FROM sibling_pids WHERE pid != {};", excl));
+  while (ssm.step() != SQLITE_DONE) {
+    out.push_back(static_cast<pid_t>(sqlite3_column_int(ssm.stmt, 0)));
+  }
+  return out;
+}
+
 uint32_t Status_Manager::get_last_job_id() {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm = Sqlite_statement_manager(conn_, get_last_jobid_stmt);
   ssm.step(true);
   return static_cast<uint32_t>(sqlite3_column_int(ssm.stmt, 0));
 }
 
 job_stat Status_Manager::get_job_by_id(uint32_t id) {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm =
       Sqlite_statement_manager(conn_, std::format(get_job_by_id_stmt, id));
   ssm.step(true);
@@ -262,7 +327,12 @@ job_stat Status_Manager::get_job_by_id(uint32_t id) {
 
 std::vector<job_stat>
 Status_Manager::get_job_stats_by_category(ListCategory c) {
-
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   std::string_view stmt;
   switch (c) {
   case ListCategory::all: // all
@@ -311,6 +381,12 @@ Status_Manager::get_job_stats_by_category(ListCategory c) {
 }
 
 job_details Status_Manager::get_job_details_by_id(uint32_t id) {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm = Sqlite_statement_manager(
       conn_, std::format(get_job_details_by_id_stmt, id));
   ssm.step(true);
@@ -344,6 +420,12 @@ job_details Status_Manager::get_job_details_by_id(uint32_t id) {
 }
 
 std::string Status_Manager::get_job_stdout(uint32_t id) {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm = Sqlite_statement_manager(
       conn_, std::format(get_job_output_stmt, "stdout", id));
   ssm.step(true);
@@ -351,6 +433,12 @@ std::string Status_Manager::get_job_stdout(uint32_t id) {
 }
 
 std::string Status_Manager::get_job_stderr(uint32_t id) {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm = Sqlite_statement_manager(
       conn_, std::format(get_job_output_stmt, "stderr", id));
   ssm.step(true);
@@ -358,6 +446,12 @@ std::string Status_Manager::get_job_stderr(uint32_t id) {
 }
 
 std::string Status_Manager::get_cmd_to_rerun(uint32_t id) {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm =
       Sqlite_statement_manager(conn_, std::format(get_cmd_to_rerun_stmt, id));
   ssm.step(true);
@@ -366,6 +460,12 @@ std::string Status_Manager::get_cmd_to_rerun(uint32_t id) {
 }
 
 uint32_t Status_Manager::get_extern_jobid() {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm = Sqlite_statement_manager(
       conn_, std::format(get_extern_jobid_stmt, jobid));
   ssm.step(true);
@@ -373,6 +473,12 @@ uint32_t Status_Manager::get_extern_jobid() {
 }
 
 prog_state Status_Manager::get_state(uint32_t id) {
+  if (!conn_) {
+    open_db();
+    if (!conn_) {
+      return {};
+    }
+  }
   auto ssm = Sqlite_statement_manager(conn_, std::format(get_state_stmt, id));
   ssm.step(true);
   auto environ_string = std::string{

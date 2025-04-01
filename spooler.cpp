@@ -45,27 +45,13 @@ namespace tsp {
 
 constexpr std::chrono::milliseconds base_wait_period{2000};
 
-Spooler_config::Spooler_config()
-    : bool_vars{{"disappear_output", false},
-                {"do_fork", true},
-                {"separate_stderr", false},
-                {"verbose", false},},
-      int_vars{{"nslots", 1}, {"rerun", -1}}, str_vars{} {}
-
-int32_t Spooler_config::get_int(std::string key) { return int_vars[key]; };
-std::string Spooler_config::get_string(std::string key) {
-  return str_vars[key];
-};
-bool Spooler_config::get_bool(std::string key) { return bool_vars[key]; };
-void Spooler_config::set_int(std::string key, uint32_t val) {
-  int_vars[key] = val;
-};
-void Spooler_config::set_string(std::string key, std::string val) {
-  str_vars[key] = val;
-};
-void Spooler_config::set_bool(std::string key, bool val) {
-  bool_vars[key] = val;
-};
+Spooler_config::Spooler_config() {
+  bool_vars = {{"disappear_output", false},
+               {"do_fork", true},
+               {"separate_stderr", false},
+               {"verbose", false}};
+  int_vars = {{"nslots", 1}, {"rerun", -1}};
+}
 
 int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
 

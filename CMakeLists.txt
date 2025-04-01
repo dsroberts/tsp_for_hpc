@@ -17,6 +17,7 @@ endif(CGROUPV2)
 set(sources
     locker.cpp
     functions.cpp
+    generic_config.cpp
     jitter.cpp
     run_cmd.cpp
     sqlite_statement_manager.cpp
@@ -25,6 +26,7 @@ set(sources
     output_manager.cpp
     proc_affinity.cpp
     spooler.cpp
+    timeout.cpp
     tsp.cpp)
 
 add_executable(tsp-hpc ${sources})
