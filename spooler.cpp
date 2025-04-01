@@ -149,6 +149,10 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     stat.job_end(128 + seen_signal);
     std::exit(EXIT_FAILURE);
   }
+  // Create our own process group here for signal handling purposes
+  if (setpgid(0, 0) == -1) {
+    die_with_err_errno("Unable to set process group id", -1);
+  }
   if (0 == (waited_on_pid = fork())) {
     if (cmd.is_openmpi) {
       setenv("OMPI_MCA_rmaps_base_mapping_policy", "", 1);

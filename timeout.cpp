@@ -31,8 +31,7 @@ int do_timeout(Timeout_config conf) {
     }
   }
 
-  auto start_time = now();
-  auto last_idle = start_time;
+  auto last_idle = now();
   auto stat_ro = tsp::Status_Manager{false, false};
   auto polling_interval =
       std::chrono::seconds(conf.get_int("polling_interval"));
@@ -44,7 +43,7 @@ int do_timeout(Timeout_config conf) {
                          std::chrono::seconds(conf.get_int("job_timeout")))
                          .count();
 
-  while (true) {
+  for (;;) {
 
     auto running_procs =
         stat_ro.get_job_stats_by_category(ListCategory::running);
@@ -59,7 +58,7 @@ int do_timeout(Timeout_config conf) {
         exit(EXIT_SUCCESS);
       }
     } else {
-      last_idle = now();
+      last_idle = current_time;
     }
     if (conf.get_bool("verbose")) {
       std::cout << "Checking runtimes for " << running_procs.size() << " jobs."
@@ -79,7 +78,7 @@ int do_timeout(Timeout_config conf) {
         // or has finished
         continue;
       }
-      if (current_time - job.stime.value() > job_timeout) {
+      if (current_time - job.stime.value() >= job_timeout) {
         if (conf.get_bool("verbose")) {
           std::cout << "Job id: " << job.id << "\nCommand: " << job.cmd
                     << "\nHas exceeded runtime limit of "
@@ -90,6 +89,9 @@ int do_timeout(Timeout_config conf) {
         auto kill_stat = kill(details.pid.value(), SIGTERM);
         if (kill_stat == -1) {
           if (errno != ESRCH) {
+            std::cerr << "Error! Unable to kill jobid " << job.id
+                      << "\nCommand: " << job.cmd
+                      << "\nTSP pid: " << details.pid.value() << std::endl;
           }
         }
       }
