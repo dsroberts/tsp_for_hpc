@@ -335,6 +335,10 @@ Status_Manager::get_job_stats_by_category(ListCategory c) {
   }
   std::string_view stmt;
   switch (c) {
+  case ListCategory::none: // invalid
+    die_with_err("Error! Requested a list but no valid list category provided",
+                 -1);
+    break;
   case ListCategory::all: // all
     stmt = get_all_jobs_stmt;
     break;

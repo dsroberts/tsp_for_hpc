@@ -118,7 +118,7 @@ constexpr std::string_view
 constexpr std::string_view
     get_extern_jobid_stmt("SELECT id FROM jobs WHERE uuid = '{}';");
 
-enum class ListCategory { all, failed, queued, running, finished };
+enum class ListCategory { none, all, failed, queued, running, finished };
 
 struct job_stat {
   uint32_t id;

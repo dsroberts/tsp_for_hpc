@@ -69,7 +69,7 @@ int do_timeout(Timeout_config conf) {
         std::cout << "Checking job " << job.id << "\nCommand: " << job.cmd
                   << std::endl;
       }
-      if (!job.stime || !!job.etime) {
+      if (!job.stime || job.etime) {
         if (conf.get_bool("verbose")) {
           std::cout << "Cannot check timing for job " << job.id
                     << " job has either not started or has ended" << std::endl;

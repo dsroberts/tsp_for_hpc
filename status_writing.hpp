@@ -7,12 +7,14 @@
 namespace tsp {
 
 enum class TimeCategory {
+  none,
   queue,
   run,
   total,
 };
 
 enum class Action {
+  none,
   list,
   stdout,
   stderr,
@@ -21,9 +23,6 @@ enum class Action {
   github_summary,
 };
 
-int do_writer_action(Action a);
-int do_writer_action(Action a, ListCategory c);
-int do_writer_action(Action a, uint32_t jobid);
-int do_writer_action(Action a, TimeCategory c);
-int do_writer_action(Action a, TimeCategory c, uint32_t jobid);
+int do_writer(Action a, TimeCategory time_cat, ListCategory list_cat,
+              std::optional<uint32_t>(jobid));
 } // namespace tsp

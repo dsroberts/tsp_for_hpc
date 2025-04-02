@@ -133,6 +133,11 @@ void print_github_summary(Status_Manager sm_ro) {
 void print_time(Status_Manager sm_ro, TimeCategory c, uint32_t jobid) {
   auto stat = sm_ro.get_job_by_id(jobid);
   switch (c) {
+  case TimeCategory::none:
+    die_with_err("Error! Requested time information but no valid time "
+                 "category provided",
+                 -1);
+    break;
   case TimeCategory::queue:
     std::cout << format_hh_mm_ss(stat.stime.value_or(now()) - stat.qtime);
     break;
@@ -151,67 +156,44 @@ void print_time(Status_Manager sm_ro, TimeCategory c, uint32_t jobid) {
   std::cout << std::endl;
 }
 
-int do_writer_action(Action a, uint32_t jobid) {
+int do_writer(Action a, TimeCategory time_cat, ListCategory list_cat,
+              std::optional<uint32_t>(jobid)) {
+
   auto sm_ro = Status_Manager(false);
   switch (a) {
+  case Action::none:
+    die_with_err(
+        "Error! Status writing requested but no valid writer action provided",
+        -1);
+    break;
   case Action::info:
-    print_job_detail(sm_ro, jobid);
+    print_job_detail(sm_ro, jobid.value_or(sm_ro.get_last_job_id()));
     break;
   case Action::stdout:
-    print_job_stdout(sm_ro, jobid);
+    print_job_stdout(sm_ro, jobid.value_or(sm_ro.get_last_job_id()));
     break;
   case Action::stderr:
-    print_job_stderr(sm_ro, jobid);
+    print_job_stderr(sm_ro, jobid.value_or(sm_ro.get_last_job_id()));
     break;
-  default:
-    die_with_err("Error! Jobid supplied for action that cannot take jobid", -1);
-  }
-  return EXIT_SUCCESS;
-};
-
-int do_writer_action(Action a) {
-  auto sm_ro = Status_Manager(false);
-  switch (a) {
   case Action::github_summary:
     print_github_summary(sm_ro);
     break;
-  case Action::info:
-  case Action::stdout:
-  case Action::stderr:
-    return do_writer_action(a, sm_ro.get_last_job_id());
+  case Action::list:
+    if (list_cat == ListCategory::none) {
+      die_with_err(
+          "Error! Requested a list but no valid list category provided", -1);
+    }
+    print_jobs_list(sm_ro, list_cat);
     break;
-  default:
-    die_with_err("Error! 'list' action requested without a category", -1);
+  case Action::print_time:
+    if (time_cat == TimeCategory::none) {
+      die_with_err("Error! Requested time information but no valid time "
+                   "category provided",
+                   -1);
+    }
+    print_time(sm_ro, time_cat, jobid.value_or(sm_ro.get_last_job_id()));
+    break;
   }
   return EXIT_SUCCESS;
 }
-
-int do_writer_action(Action a, ListCategory c) {
-  auto sm_ro = Status_Manager(false);
-  switch (a) {
-  case Action::list:
-    print_jobs_list(sm_ro, c);
-    break;
-  default:
-    die_with_err("Error! List category supplied for non-list action", -1);
-  }
-  return EXIT_SUCCESS;
-};
-
-int do_writer_action(Action a, TimeCategory c, uint32_t jobid) {
-  auto sm_ro = Status_Manager(false);
-  switch (a) {
-  case Action::print_time:
-    print_time(sm_ro, c, jobid);
-    break;
-  default:
-    die_with_err("Error! Time category supplied for non-print_time action", -1);
-  }
-  return EXIT_SUCCESS;
-};
-
-int do_writer_action(Action a, TimeCategory c) {
-  auto sm_ro = Status_Manager(false);
-  return do_writer_action(a, c, sm_ro.get_last_job_id());
-};
 } // namespace tsp

@@ -17,7 +17,7 @@
 
 namespace tsp {
 
-enum class TSPProgram { spooler, timeout };
+enum class TSPProgram { spooler, writer, timeout };
 
 static struct option long_options[] = {
     {"no-output", no_argument, nullptr, 'n'},
@@ -54,17 +54,24 @@ int main(int argc, char *argv[]) {
   auto prog = tsp::TSPProgram::spooler;
 
   if (argc == 1) {
-    return tsp::do_writer_action(tsp::Action::list, tsp::ListCategory::all);
+    return tsp::do_writer(tsp::Action::list, tsp::TimeCategory::none,
+                          tsp::ListCategory::all, {});
   }
 
   auto sp_conf = tsp::Spooler_config();
   auto timeout_conf = tsp::Timeout_config();
+  auto writer_action = tsp::Action::none;
+  auto time_cat = tsp::TimeCategory::none;
+  auto list_cat = tsp::ListCategory::none;
+  std::optional<uint32_t> jobid;
+
+  auto leave_options_loop = false;
 
   opterr = 0;
   int c;
   int option_index;
-  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:r:vT:I:p:", tsp::long_options,
-                          &option_index)) != -1) {
+  while ((c = getopt_long(argc, argv, "+nfL:N:Ei:lho:e:r:vT:I:p:",
+                          tsp::long_options, &option_index)) != -1) {
     switch (c) {
     case 'n':
       // Pipe stdout and stderr of forked process to /dev/null
@@ -91,16 +98,28 @@ int main(int argc, char *argv[]) {
       sp_conf.set_int("rerun", std::stoul(optarg));
       break;
     case 'i':
-      return tsp::do_writer_action(tsp::Action::info, std::stoul(optarg));
+      prog = tsp::TSPProgram::writer;
+      writer_action = tsp::Action::info;
+      jobid = std::stoul(optarg);
+      leave_options_loop = true;
       break;
     case 'o':
-      return tsp::do_writer_action(tsp::Action::stdout, std::stoul(optarg));
+      prog = tsp::TSPProgram::writer;
+      writer_action = tsp::Action::stdout;
+      jobid = std::stoul(optarg);
+      leave_options_loop = true;
       break;
     case 'e':
-      return tsp::do_writer_action(tsp::Action::stderr, std::stoul(optarg));
+      prog = tsp::TSPProgram::writer;
+      writer_action = tsp::Action::stderr;
+      jobid = std::stoul(optarg);
+      leave_options_loop = true;
       break;
     case 'l':
-      return tsp::do_writer_action(tsp::Action::list, tsp::ListCategory::all);
+      prog = tsp::TSPProgram::writer;
+      writer_action = tsp::Action::list;
+      list_cat = tsp::ListCategory::all;
+      leave_options_loop = true;
       break;
     case 'p':
       timeout_conf.set_int("polling_interval", std::stoul(optarg));
@@ -118,25 +137,37 @@ int main(int argc, char *argv[]) {
     case '?':
       switch (optopt) {
       case 'i':
-        return tsp::do_writer_action(tsp::Action::info);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::info;
+        leave_options_loop = true;
         break;
       case 'o':
-        return tsp::do_writer_action(tsp::Action::stdout);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::stdout;
+        leave_options_loop = true;
         break;
       case 'e':
-        return tsp::do_writer_action(tsp::Action::stderr);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::stderr;
+        leave_options_loop = true;
         break;
       case 1:
-        return tsp::do_writer_action(tsp::Action::print_time,
-                                     tsp::TimeCategory::queue);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::print_time;
+        time_cat = tsp::TimeCategory::queue;
+        leave_options_loop = true;
         break;
       case 2:
-        return tsp::do_writer_action(tsp::Action::print_time,
-                                     tsp::TimeCategory::run);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::print_time;
+        time_cat = tsp::TimeCategory::run;
+        leave_options_loop = true;
         break;
       case 3:
-        return tsp::do_writer_action(tsp::Action::print_time,
-                                     tsp::TimeCategory::total);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::print_time;
+        time_cat = tsp::TimeCategory::total;
+        leave_options_loop = true;
         break;
       default:
         std::cout << "Unknown option: " << argv[optind - 1] << std::endl;
@@ -150,42 +181,62 @@ int main(int argc, char *argv[]) {
         return EXIT_SUCCESS;
       }
       if (std::string{"gh-summary"} == tsp::long_options[option_index].name) {
-        return tsp::do_writer_action(tsp::Action::github_summary);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::github_summary;
+        leave_options_loop = true;
       }
       if (std::string{"list-failed"} == tsp::long_options[option_index].name) {
-        return tsp::do_writer_action(tsp::Action::list,
-                                     tsp::ListCategory::failed);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::list;
+        list_cat = tsp::ListCategory::failed;
+        leave_options_loop = true;
       }
       if (std::string{"list-queued"} == tsp::long_options[option_index].name) {
-        return tsp::do_writer_action(tsp::Action::list,
-                                     tsp::ListCategory::queued);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::list;
+        list_cat = tsp::ListCategory::queued;
+        leave_options_loop = true;
       }
       if (std::string{"list-running"} == tsp::long_options[option_index].name) {
-        return tsp::do_writer_action(tsp::Action::list,
-                                     tsp::ListCategory::running);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::list;
+        list_cat = tsp::ListCategory::running;
+        leave_options_loop = true;
       }
       if (std::string{"list-finished"} ==
           tsp::long_options[option_index].name) {
-        return tsp::do_writer_action(tsp::Action::list,
-                                     tsp::ListCategory::finished);
+        prog = tsp::TSPProgram::writer;
+        writer_action = tsp::Action::list;
+        list_cat = tsp::ListCategory::finished;
+        leave_options_loop = true;
       }
       if (std::string{"timeout"} == tsp::long_options[option_index].name) {
         prog = tsp::TSPProgram::timeout;
       }
       break;
     case 1:
-      return tsp::do_writer_action(tsp::Action::print_time,
-                                   tsp::TimeCategory::queue,
-                                   std::stoul(optarg));
+      prog = tsp::TSPProgram::writer;
+      writer_action = tsp::Action::print_time;
+      time_cat = tsp::TimeCategory::queue;
+      jobid = std::stoul(optarg);
+      leave_options_loop = true;
       break;
     case 2:
-      return tsp::do_writer_action(tsp::Action::print_time,
-                                   tsp::TimeCategory::run, std::stoul(optarg));
+      prog = tsp::TSPProgram::writer;
+      writer_action = tsp::Action::print_time;
+      time_cat = tsp::TimeCategory::run;
+      jobid = std::stoul(optarg);
+      leave_options_loop = true;
       break;
     case 3:
-      return tsp::do_writer_action(tsp::Action::print_time,
-                                   tsp::TimeCategory::total,
-                                   std::stoul(optarg));
+      prog = tsp::TSPProgram::writer;
+      writer_action = tsp::Action::print_time;
+      time_cat = tsp::TimeCategory::total;
+      jobid = std::stoul(optarg);
+      leave_options_loop = true;
+      break;
+    }
+    if (leave_options_loop) {
       break;
     }
   };
@@ -193,6 +244,9 @@ int main(int argc, char *argv[]) {
   switch (prog) {
   case tsp::TSPProgram::spooler:
     return tsp::do_spooler(sp_conf, argc, optind, argv);
+    break;
+  case tsp::TSPProgram::writer:
+    return tsp::do_writer(writer_action, time_cat, list_cat, jobid);
     break;
   case tsp::TSPProgram::timeout:
     return tsp::do_timeout(timeout_conf);
