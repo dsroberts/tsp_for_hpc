@@ -14,6 +14,7 @@ public:
   ~Sqlite_statement_manager();
   int step(bool must_have_row);
   int step();
+  int step_and_reset();
   sqlite3_stmt *stmt;
 
 private:

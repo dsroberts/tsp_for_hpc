@@ -17,16 +17,19 @@ endif(CGROUPV2)
 set(sources
     locker.cpp
     functions.cpp
+    proc_tools.cpp
     generic_config.cpp
     jitter.cpp
     run_cmd.cpp
     sqlite_statement_manager.cpp
     status_manager.cpp
+    memprof_manager.cpp
     status_writing.cpp
     output_manager.cpp
     proc_affinity.cpp
     spooler.cpp
     timeout.cpp
+    memprof.cpp
     tsp.cpp)
 
 add_executable(tsp-hpc ${sources})

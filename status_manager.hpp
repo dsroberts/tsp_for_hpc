@@ -53,8 +53,8 @@ constexpr std::string_view db_initialise(
     "CREATE VIEW IF NOT EXISTS used_slots AS SELECT IFNULL(SUM(slots),0) as s "
     "FROM job_details WHERE stime IS NOT NULL AND etime IS NULL;"
     // Create sibling_pids view
-    "CREATE VIEW IF NOT EXISTS sibling_pids AS SELECT pid FROM jobs WHERE id "
-    "IN ( SELECT id FROM job_details WHERE stime IS NOT NULL and etime IS "
+    "CREATE VIEW IF NOT EXISTS sibling_pids AS SELECT id,pid FROM jobs WHERE "
+    "id IN ( SELECT id FROM job_details WHERE stime IS NOT NULL and etime IS "
     "NULL);\0");
 
 // Clean old entries
@@ -171,17 +171,18 @@ public:
   uint64_t stime;
   uint64_t etime;
 
-private:
+protected:
   sqlite3 *conn_ = nullptr;
-  int32_t slots_req_;
   const bool rw_;
+
+private:
+  int db_open_flags_;
+  int32_t slots_req_;
   const bool die_on_open_fail_;
   const int32_t total_slots_;
   std::string gen_jobid();
   void open_db();
   bool started;
   bool finished;
-
-  int db_open_flags_;
 };
 } // namespace tsp

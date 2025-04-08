@@ -49,7 +49,8 @@ Spooler_config::Spooler_config() {
   bool_vars = {{"disappear_output", false},
                {"do_fork", true},
                {"separate_stderr", false},
-               {"verbose", false}};
+               {"verbose", false},
+               {"binding", true}};
   int_vars = {{"nslots", 1}, {"rerun", -1}};
 }
 
@@ -113,7 +114,9 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
       std::this_thread::sleep_for(base_wait_period + jitter.get());
     }
     stat.job_start();
-    bound_cores = binder.bind();
+    if (config.get_bool("binding")) {
+      bound_cores = binder.bind();
+    }
   }
 
   if (config.get_bool("verbose")) {
@@ -127,7 +130,7 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     std::cout << std::endl;
   }
 
-  if (cmd.is_openmpi) {
+  if (cmd.is_openmpi && config.get_bool("binding")) {
     cmd.add_rankfile(bound_cores, config.get_int("nslots"));
   }
 
