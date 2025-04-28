@@ -17,6 +17,7 @@ endif(CGROUPV2)
 set(sources
     locker.cpp
     functions.cpp
+    proc_tools.cpp
     generic_config.cpp
     jitter.cpp
     run_cmd.cpp
@@ -26,8 +27,15 @@ set(sources
     output_manager.cpp
     proc_affinity.cpp
     spooler.cpp
-    timeout.cpp
-    tsp.cpp)
+    timeout.cpp)
+
+### Windows compatibility is a pipedream
+IF (NOT APPLE AND NOT MSVC)
+    list(APPEND sources memprof_manager.cpp memprof.cpp)
+endif ()
+
+### Purely aesthetic
+list(APPEND sources tsp.cpp)
 
 add_executable(tsp-hpc ${sources})
 

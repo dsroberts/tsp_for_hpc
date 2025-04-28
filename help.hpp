@@ -23,9 +23,21 @@ constexpr std::string_view help{
     " A 'timeout' mode is available when the --timeout flag is passed to TSP.\n"
     " In this mode, TSP will monitor all currently running TSP instances and "
     "kill\n"
-    " any that exceed a pre-designated time limit. An idle timeout is used to end\n"
-    " TSP in this mode. If other running TSP processes are detected over the idle\n"
+    " any that exceed a pre-designated time limit. An idle timeout is used to "
+    "end\n"
+    " TSP in this mode. If no other running TSP processes are detected over "
+    "the idle\n"
     " timeout period, TSP will automatically shut down\n\n"
+// Disable memprof on not-linux systems
+#ifdef __linux__
+    " A memory profiling mode is available when the --memprof flag is passed\n"
+    " to TSP. In this mode, TSP will periodically inspect the memory usage of\n"
+    " all running TSP processes and all of their associated subprocesses. "
+    "Like\n"
+    " timeout mode, when no other TSP-controlled running jobs are detected "
+    "over\n"
+    " an idle timeout period, TSP will automatically shut down.\n\n"
+#endif
     "Usage: {} [OPTION]... [COMMAND...] \n\n"
     "Global options:\n"
     "  -f, --no-fork          Do not fork the original TSP process to the "
@@ -50,7 +62,18 @@ constexpr std::string_view help{
     "                         Default is 30\n"
     "  -T  --job-timeout=T    How many seconds other TSP instances should be "
     "allowed to run.\n"
-    "                         Default is 7200 (2 hours)\n"
+    "                         Default is 7200 (2 hours)\n\n"
+// Disable memprof on not-linux systems
+#ifdef __linux__
+    "Memory Profiling Mode Options:\n"
+    "      --memprof          Run the TSP memory profiling function\n"
+    "  -p  --polling-interval=T\n"
+    "                         Poll for running TSP instances every T seconds. "
+    "Default is 10.\n"
+    "  -I  --idle-timeout=T   If TSP has not detected any running jobs in T "
+    "seconds, exit.\n"
+    "                         Default is 30\n\n"
+#endif
     "Job Querying Options:\n"
     "  -l, --list             Show the job list (default action)\n"
     "      --list-failed      Show the list of failed jobs\n"

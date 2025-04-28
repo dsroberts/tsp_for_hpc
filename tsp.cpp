@@ -14,10 +14,16 @@
 #include "status_manager.hpp"
 #include "status_writing.hpp"
 #include "timeout.hpp"
+// Disable memprof on not-linux systems
+#ifdef __linux__
+#include "memprof.hpp"
+#else
+#include "generic_config.hpp"
+#endif
 
 namespace tsp {
 
-enum class TSPProgram { spooler, writer, timeout };
+enum class TSPProgram { spooler, writer, timeout, memprof };
 
 static struct option long_options[] = {
     {"no-output", no_argument, nullptr, 'n'},
@@ -33,6 +39,8 @@ static struct option long_options[] = {
     {"list-queued", no_argument, nullptr, 0},
     {"list-running", no_argument, nullptr, 0},
     {"list-finished", no_argument, nullptr, 0},
+    {"memprof", no_argument, nullptr, 0},
+    {"nobind", no_argument, nullptr, 0},
     {"print-queue-time", required_argument, nullptr, 1},
     {"print-run-time", required_argument, nullptr, 2},
     {"print-total-time", required_argument, nullptr, 3},
@@ -60,6 +68,12 @@ int main(int argc, char *argv[]) {
 
   auto sp_conf = tsp::Spooler_config();
   auto timeout_conf = tsp::Timeout_config();
+// Disable memprof on not-linux systems
+#ifdef __linux__
+  auto memprof_conf = tsp::Memprof_config();
+#else
+  auto memprof_conf = tsp::Generic_config();
+#endif
   auto writer_action = tsp::Action::none;
   auto time_cat = tsp::TimeCategory::none;
   auto list_cat = tsp::ListCategory::none;
@@ -80,6 +94,7 @@ int main(int argc, char *argv[]) {
     case 'f':
       sp_conf.set_bool("do_fork", false);
       timeout_conf.set_bool("do_fork", false);
+      memprof_conf.set_bool("do_fork", false);
       break;
     case 'N':
       sp_conf.set_int("nslots", std::stoul(optarg));
@@ -93,6 +108,7 @@ int main(int argc, char *argv[]) {
     case 'v':
       sp_conf.set_bool("verbose", true);
       timeout_conf.set_bool("verbose", true);
+      memprof_conf.set_bool("verbose", true);
       break;
     case 'r':
       sp_conf.set_int("rerun", std::stoul(optarg));
@@ -123,9 +139,11 @@ int main(int argc, char *argv[]) {
       break;
     case 'p':
       timeout_conf.set_int("polling_interval", std::stoul(optarg));
+      memprof_conf.set_int("polling_interval", std::stoul(optarg));
       break;
     case 'I':
       timeout_conf.set_int("idle_timeout", std::stoul(optarg));
+      memprof_conf.set_int("idle_timeout", std::stoul(optarg));
       break;
     case 'T':
       timeout_conf.set_int("job_timeout", std::stoul(optarg));
@@ -177,7 +195,7 @@ int main(int argc, char *argv[]) {
       }
     case 0:
       if (std::string{"db-path"} == tsp::long_options[option_index].name) {
-        std::cout << (get_tmp() / tsp::db_name).string() << std::endl;
+        std::cout << (tsp::get_tmp() / tsp::db_name).string() << std::endl;
         return EXIT_SUCCESS;
       }
       if (std::string{"gh-summary"} == tsp::long_options[option_index].name) {
@@ -212,6 +230,12 @@ int main(int argc, char *argv[]) {
       }
       if (std::string{"timeout"} == tsp::long_options[option_index].name) {
         prog = tsp::TSPProgram::timeout;
+      }
+      if (std::string{"memprof"} == tsp::long_options[option_index].name) {
+        prog = tsp::TSPProgram::memprof;
+      }
+      if (std::string{"nobind"} == tsp::long_options[option_index].name) {
+        sp_conf.set_bool("binding", false);
       }
       break;
     case 1:
@@ -250,6 +274,14 @@ int main(int argc, char *argv[]) {
     break;
   case tsp::TSPProgram::timeout:
     return tsp::do_timeout(timeout_conf);
+    break;
+  case tsp::TSPProgram::memprof:
+// Disable memprof on not-linux systems
+#ifdef __linux__
+    return tsp::do_memprof(memprof_conf);
+#else
+    die_with_err("memprof only implemented on linux", -1)
+#endif
     break;
   }
 }

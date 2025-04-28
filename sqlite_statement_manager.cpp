@@ -47,15 +47,19 @@ int Sqlite_statement_manager::step(bool must_have_row) {
           "Statement was expected to return results but did not:\n", sql_,
           sqlite_ret_, conn_);
     }
-    return sqlite_ret_;
-  } else if (sqlite_ret_ == SQLITE_ROW) {
-    return sqlite_ret_;
-  } else {
+  } else if (sqlite_ret_ != SQLITE_ROW) {
     exit_with_sqlite_err("SQLite step for statement failed:\n", sql_,
                          sqlite_ret_, conn_);
-    return sqlite_ret_;
   }
+  return sqlite_ret_;
 }
 int Sqlite_statement_manager::step() { return step(false); }
+int Sqlite_statement_manager::step_and_reset() {
+  step();
+  if ((sqlite_ret_ = sqlite3_reset(stmt)) != SQLITE_OK) {
+    exit_with_sqlite_err("SQLite rest failed:\n", sql_, sqlite_ret_, conn_);
+  };
+  return sqlite_ret_;
+}
 
 } // namespace tsp

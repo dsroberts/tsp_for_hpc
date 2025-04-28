@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "functions.hpp"
+#include "proc_tools.hpp"
 #include "run_cmd.hpp"
 #include "sqlite_statement_manager.hpp"
 

@@ -5,6 +5,7 @@
 #include <numeric>
 
 #include "functions.hpp"
+#include "proc_tools.hpp"
 #include "status_manager.hpp"
 
 namespace tsp {

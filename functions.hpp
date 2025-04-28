@@ -2,14 +2,15 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <numeric>
 #include <string>
 #include <vector>
+
+namespace tsp {
 
 const std::filesystem::path get_tmp();
 void die_with_err(std::string msg, int status);
 void die_with_err_errno(std::string msg, int status);
-std::vector<uint32_t> parse_cpuset_range(std::string in);
-std::vector<uint32_t> get_cgroup();
 int64_t now();
 std::string format_hh_mm_ss(int64_t us_duration);
+
+} // namespace tsp
