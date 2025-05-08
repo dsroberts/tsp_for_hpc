@@ -15,12 +15,11 @@ public:
   ~Output_handler();
 
 private:
-  std::string stdout_fn_{};
-  std::string stderr_fn_{};
+  const std::string stdout_fn_{};
+  const std::string stderr_fn_{};
   int stdout_fd_;
   int stderr_fd_;
-  bool disappear_;
-  bool separate_stderr_;
-  std::pair<std::string, std::string> out_bufs_{};
+  const bool disappear_;
+  const bool separate_stderr_;
 };
 } // namespace tsp

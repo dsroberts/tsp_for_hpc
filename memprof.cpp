@@ -7,7 +7,7 @@
 
 #include "functions.hpp"
 #include "memprof_manager.hpp"
-#include "proc_tools.hpp"
+#include "linux_proc_tools.hpp"
 
 namespace tsp {
 

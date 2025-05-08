@@ -235,7 +235,11 @@ int main(int argc, char *argv[]) {
         prog = tsp::TSPProgram::memprof;
       }
       if (std::string{"nobind"} == tsp::long_options[option_index].name) {
+#ifdef __APPLE__
+        sp_conf.set_bool("binding", true);
+#else
         sp_conf.set_bool("binding", false);
+#endif
       }
       break;
     case 1:
@@ -280,7 +284,7 @@ int main(int argc, char *argv[]) {
 #ifdef __linux__
     return tsp::do_memprof(memprof_conf);
 #else
-    die_with_err("memprof only implemented on linux", -1)
+    tsp::die_with_err("memprof only implemented on linux", -1);
 #endif
     break;
   }

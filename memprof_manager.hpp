@@ -4,7 +4,7 @@
 #include <utility>
 #include <vector>
 
-#include "proc_tools.hpp"
+#include "linux_proc_tools.hpp"
 #include "status_manager.hpp"
 
 namespace tsp {

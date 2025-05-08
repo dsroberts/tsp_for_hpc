@@ -150,6 +150,7 @@ public:
   Status_Manager(bool rw);
   Status_Manager();
   ~Status_Manager();
+  void set_total_slots(int32_t total_slots);
   void add_cmd(Run_cmd &cmd, std::string category, int32_t slots);
   void add_cmd(Run_cmd &cmd, uint32_t id);
   void job_start();
@@ -179,10 +180,11 @@ private:
   int db_open_flags_;
   int32_t slots_req_;
   const bool die_on_open_fail_;
-  const int32_t total_slots_;
+  int32_t total_slots_;
+  bool slots_set_;
+  bool started_;
+  bool finished_;
   std::string gen_jobid();
   void open_db();
-  bool started;
-  bool finished;
 };
 } // namespace tsp

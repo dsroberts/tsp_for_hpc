@@ -1,9 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <cstdlib>
-#include <filesystem>
-#include <string>
+#include <hwloc.h>
+#include <string_view>
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
@@ -14,15 +13,17 @@ namespace tsp {
 class Proc_affinity {
 public:
   Proc_affinity(Status_Manager &sm, int32_t nslots, pid_t pid);
+  ~Proc_affinity();
   std::vector<uint32_t> bind();
+  std::string_view error_string;
 
 private:
   Status_Manager &sm_;
+  hwloc_topology_t topology_;
+  hwloc_const_bitmap_t cpuset_all_;
+  hwloc_bitmap_t cpuset_mine_;
   const int32_t nslots_;
   const pid_t pid_;
-  const std::vector<uint32_t> cpuset_from_cgroup_;
-  cpu_set_t mask_;
   std::vector<pid_t> get_siblings();
-  std::vector<uint32_t> get_sibling_affinity(pid_t pid);
 };
 } // namespace tsp

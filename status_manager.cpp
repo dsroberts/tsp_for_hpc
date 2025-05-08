@@ -12,7 +12,6 @@
 #include <utility>
 
 #include "functions.hpp"
-#include "proc_tools.hpp"
 #include "run_cmd.hpp"
 #include "sqlite_statement_manager.hpp"
 
@@ -20,8 +19,8 @@ namespace tsp {
 
 Status_Manager::Status_Manager(bool rw, bool die_on_open_fail)
     : jobid(rw ? gen_jobid() : ""), rw_(rw),
-      die_on_open_fail_(die_on_open_fail),
-      total_slots_(rw ? get_cgroup().size() : 0) {
+      die_on_open_fail_(die_on_open_fail), total_slots_(0l), slots_set_(false),
+      started_(false), finished_(false) {
   if (rw && !die_on_open_fail) {
     die_with_err(
         "Not allowed to continue through open failure when in read-write mode",
@@ -35,6 +34,16 @@ Status_Manager::~Status_Manager() {
   if (conn_) {
     sqlite3_close_v2(conn_);
   }
+}
+
+void Status_Manager::set_total_slots(int32_t total_slots) {
+  // Only allow this call once
+  if (slots_set_) {
+    die_with_err(
+        "Error! Attempted to set total number of available cores twice!", -1);
+  }
+  total_slots_ = total_slots;
+  slots_set_ = true;
 }
 
 void Status_Manager::open_db() {
@@ -178,21 +187,24 @@ void Status_Manager::job_start() {
                   "WHERE uuid = \"{}\";",
                   stime, jobid),
       true);
-  started = true;
+  started_ = true;
 }
 
 void Status_Manager::job_end(int exit_stat) {
   if (!rw_) {
     die_with_err("Attempted to write to database in read-only mode!", -1);
   }
+  if (!started_) {
+    job_start();
+  }
   etime = now();
   auto ssm = Sqlite_statement_manager(
       conn_,
       std::format("INSERT INTO etime(jobid,exit_status,time) SELECT "
                   "id,{},{} FROM jobs WHERE uuid= \"{}\";",
-                  exit_stat, now(), jobid),
+                  exit_stat, etime, jobid),
       true);
-  finished = true;
+  finished_ = true;
 }
 
 void Status_Manager::save_output(

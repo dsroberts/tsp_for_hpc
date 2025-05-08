@@ -7,6 +7,7 @@
 #include <format>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace tsp {
@@ -24,13 +25,13 @@ const std::filesystem::path get_tmp() {
   }
 };
 
-void die_with_err(std::string msg, int status) {
+void die_with_err(std::string_view msg, int status) {
   std::cerr << msg << std::endl;
   std::cerr << "stat=" << status << std::endl;
   std::exit(EXIT_FAILURE);
 };
 
-void die_with_err_errno(std::string msg, int status) {
+void die_with_err_errno(std::string_view msg, int status) {
   std::cerr << msg << std::endl;
   std::cerr << "stat=" << status << ", errno=" << errno << std::endl;
   std::cerr << strerror(errno) << std::endl;

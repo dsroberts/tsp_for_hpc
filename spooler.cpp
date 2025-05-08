@@ -39,6 +39,8 @@ void sigintHandlerPreFork(int sig) {
   seen_signal = sig;
 }
 
+extern char **environ;
+
 auto signals_to_forward = {SIGINT, SIGHUP, SIGTERM};
 
 namespace tsp {
@@ -50,7 +52,11 @@ Spooler_config::Spooler_config() {
                {"do_fork", true},
                {"separate_stderr", false},
                {"verbose", false},
+#ifdef __APPLE__
+               {"binding", false}};
+#else
                {"binding", true}};
+#endif
   int_vars = {{"nslots", 1}, {"rerun", -1}};
 }
 
@@ -97,12 +103,15 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
   std::this_thread::sleep_for(tsp::jitter_ms + jitter.get());
 
   auto binder = tsp::Proc_affinity{stat, config.get_int("nslots"), getpid()};
+  if (!binder.error_string.empty()) {
+    stat.job_end(-1);
+    die_with_err(binder.error_string, -1);
+  }
   std::vector<uint32_t> bound_cores;
   {
     auto locker = tsp::Locker();
     for (;;) {
       if (time_to_die) {
-        stat.job_start();
         stat.job_end(128 + seen_signal);
         std::exit(EXIT_FAILURE);
       }
@@ -116,6 +125,10 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     stat.job_start();
     if (config.get_bool("binding")) {
       bound_cores = binder.bind();
+      if (!binder.error_string.empty()) {
+        stat.job_end(-1);
+        die_with_err_errno(binder.error_string, -1);
+      }
     }
   }
 
@@ -154,6 +167,7 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
   }
   // Create our own process group here for signal handling purposes
   if (setpgid(0, 0) == -1) {
+    stat.job_end(-1);
     die_with_err_errno("Unable to set process group id", -1);
   }
   if (0 == (waited_on_pid = fork())) {
@@ -164,11 +178,14 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     handler.init_pipes();
     ret = execvp(cmd.get_argv_0(), cmd.get_argv());
     if (ret != 0) {
-      die_with_err("Error: could not exec " + std::string(cmd.get_argv_0()),
+      stat.job_end(-1);
+      die_with_err(std::format("Error: could not exec {}",
+                               std::string(cmd.get_argv_0())),
                    ret);
     }
   }
   if (waited_on_pid == -1) {
+    stat.job_end(-1);
     die_with_err("Error: could not fork subprocess to exec", waited_on_pid);
   }
   for (const auto sig : signals_to_forward) {

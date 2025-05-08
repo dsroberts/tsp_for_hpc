@@ -18,7 +18,7 @@ public:
   sqlite3_stmt *stmt;
 
 private:
-  std::string_view sql_;
+  const std::string_view sql_;
   int sqlite_ret_;
   sqlite3 *conn_;
 };

@@ -1,5 +1,6 @@
 #include "status_writing.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <format>
@@ -90,7 +91,6 @@ void print_job_detail(Status_Manager sm_ro, uint32_t id) {
   auto info = sm_ro.get_job_details_by_id(id);
   // Expects /etc/localtime to be symlink, therefore
   // broken on Gadi
-  auto tz = std::chrono::current_zone();
   // Finished
   std::string runtime{format_hh_mm_ss(info.stat.etime.value_or(now()) -
                                       info.stat.stime.value_or(now()))};
@@ -104,19 +104,39 @@ void print_job_detail(Status_Manager sm_ro, uint32_t id) {
   }
   std::cout << "Command: " << info.stat.cmd << "\n";
   std::cout << "Slots required: " << info.slots << "\n";
-  std::chrono::system_clock::time_point tp{
+  std::chrono::system_clock::time_point qtp{
       std::chrono::microseconds{info.stat.qtime}};
-  std::cout << "Enqueue time: " << tz->to_local(tp) << "\n";
+  std::chrono::system_clock::time_point stp;
+  std::chrono::system_clock::time_point etp;
   if (info.stat.stime) {
-    std::chrono::system_clock::time_point tp{
+    stp = std::chrono::system_clock::time_point{
         std::chrono::microseconds{info.stat.stime.value()}};
-    std::cout << "Start time: " << tz->to_local(tp) << "\n";
   }
   if (info.stat.etime) {
-    std::chrono::system_clock::time_point tp{
+    etp = std::chrono::system_clock::time_point{
         std::chrono::microseconds{info.stat.etime.value()}};
-    std::cout << "End time: " << tz->to_local(tp) << "\n";
   }
+#ifdef __APPLE__
+  // As of 2025/05 Apple clang does not support
+  // https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0355r7.html
+  std::cout << "Enqueue time: " << qtp << "\n";
+  if (info.stat.stime) {
+    std::cout << "Start time: " << stp << "\n";
+  }
+  if (info.stat.etime) {
+    std::cout << "End time: " << etp << "\n";
+  }
+#else
+  auto tz = std::chrono::get_tzdb().current_zone();
+  std::cout << "Enqueue time: " << tz->to_local(qtp) << "\n";
+  if (info.stat.stime) {
+    std::cout << "Start time: " << tz->to_local(stp) << "\n";
+  }
+  if (info.stat.etime) {
+    std::cout << "End time: " << tz->to_local(etp) << "\n";
+  }
+
+#endif
   if (info.stat.stime) {
     std::cout << "Time run: " << runtime << "\n";
     std::cout << "TSP process pid: " << info.pid.value() << "\n";

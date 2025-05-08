@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <fstream>
 #include <ranges>
+#include <sstream>
+#include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
