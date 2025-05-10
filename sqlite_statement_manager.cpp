@@ -27,7 +27,7 @@ Sqlite_statement_manager::Sqlite_statement_manager(sqlite3 *conn,
                                                    bool dostep)
     : sql_(sql), sqlite_ret_(SQLITE_OK), conn_(conn) {
   if ((sqlite_ret_ = sqlite3_prepare_v2(conn_, sql_.data(), sql_.length(),
-                                        &stmt, nullptr)) != SQLITE_OK) {
+                                        &stmt_, nullptr)) != SQLITE_OK) {
     exit_with_sqlite_err("Could not prepare the following sql statement:", sql_,
                          sqlite_ret_, conn_);
   }
@@ -41,7 +41,7 @@ Sqlite_statement_manager::Sqlite_statement_manager(sqlite3 *conn,
     : Sqlite_statement_manager(conn, sql, false) {}
 
 Sqlite_statement_manager::~Sqlite_statement_manager() {
-  if ((sqlite_ret_ = sqlite3_finalize(stmt)) != SQLITE_OK) {
+  if ((sqlite_ret_ = sqlite3_finalize(stmt_)) != SQLITE_OK) {
     exit_with_sqlite_err("Unable finalize statement:\n", sql_, sqlite_ret_,
                          conn_);
   };
@@ -53,31 +53,31 @@ Output param specialisations
 
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx, int32_t &val) {
-  val = sqlite3_column_int(stmt, param_idx);
+  val = sqlite3_column_int(stmt_, param_idx);
 }
 
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx, uint32_t &val) {
-  val = static_cast<uint32_t>(sqlite3_column_int(stmt, param_idx));
+  val = static_cast<uint32_t>(sqlite3_column_int(stmt_, param_idx));
 }
 
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx, int64_t &val) {
-  val = sqlite3_column_int64(stmt, param_idx);
+  val = sqlite3_column_int64(stmt_, param_idx);
 }
 
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx, uint64_t &val) {
-  val = static_cast<uint64_t>(sqlite3_column_int64(stmt, param_idx));
+  val = static_cast<uint64_t>(sqlite3_column_int64(stmt_, param_idx));
 }
 
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx,
                                               std::optional<int32_t> &val) {
   val.reset();
-  auto tmp = sqlite3_column_text(stmt, param_idx);
+  auto tmp = sqlite3_column_text(stmt_, param_idx);
   if (!!tmp) {
-    val.emplace(sqlite3_column_int(stmt, param_idx));
+    val.emplace(sqlite3_column_int(stmt_, param_idx));
   }
 }
 
@@ -85,9 +85,9 @@ template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx,
                                               std::optional<uint32_t> &val) {
   val.reset();
-  auto tmp = sqlite3_column_text(stmt, param_idx);
+  auto tmp = sqlite3_column_text(stmt_, param_idx);
   if (!!tmp) {
-    val.emplace(sqlite3_column_int(stmt, param_idx));
+    val.emplace(sqlite3_column_int(stmt_, param_idx));
   }
 }
 
@@ -95,9 +95,9 @@ template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx,
                                               std::optional<int64_t> &val) {
   val.reset();
-  auto tmp = sqlite3_column_text(stmt, param_idx);
+  auto tmp = sqlite3_column_text(stmt_, param_idx);
   if (!!tmp) {
-    val.emplace(sqlite3_column_int64(stmt, param_idx));
+    val.emplace(sqlite3_column_int64(stmt_, param_idx));
   }
 }
 
@@ -105,22 +105,22 @@ template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx,
                                               std::optional<uint64_t> &val) {
   val.reset();
-  auto tmp = sqlite3_column_text(stmt, param_idx);
+  auto tmp = sqlite3_column_text(stmt_, param_idx);
   if (!!tmp) {
-    val.emplace(sqlite3_column_int64(stmt, param_idx));
+    val.emplace(sqlite3_column_int64(stmt_, param_idx));
   }
 }
 
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx, std::string &val) {
-  val = reinterpret_cast<const char *>(sqlite3_column_text(stmt, param_idx));
+  val = reinterpret_cast<const char *>(sqlite3_column_text(stmt_, param_idx));
 }
 
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx,
                                               std::optional<std::string> &val) {
   val.reset();
-  auto tmp = sqlite3_column_text(stmt, param_idx);
+  auto tmp = sqlite3_column_text(stmt_, param_idx);
   if (tmp[0] != '\0') {
     val.emplace(reinterpret_cast<const char *>(tmp));
   }
@@ -129,15 +129,15 @@ void Sqlite_statement_manager::bind_out_param(int param_idx,
 template <>
 void Sqlite_statement_manager::bind_out_param(int param_idx,
                                               std::filesystem::path &val) {
-  val = reinterpret_cast<const char *>(sqlite3_column_text(stmt, param_idx));
+  val = reinterpret_cast<const char *>(sqlite3_column_text(stmt_, param_idx));
 }
 
 template <>
 void Sqlite_statement_manager::bind_out_param(
     int param_idx, std::pair<char **, std::string> &val) {
   val.second.assign(
-      reinterpret_cast<const char *>(sqlite3_column_blob(stmt, param_idx)),
-      static_cast<size_t>(sqlite3_column_bytes(stmt, param_idx)));
+      reinterpret_cast<const char *>(sqlite3_column_blob(stmt_, param_idx)),
+      static_cast<size_t>(sqlite3_column_bytes(stmt_, param_idx)));
   auto ntokens = 0ul;
   for (const auto &c : val.second) {
     if (c == '\0') {
@@ -165,7 +165,7 @@ Input param specialisations
 template <>
 void Sqlite_statement_manager::bind_in_param(int param_idx,
                                              const std::string &val) {
-  if ((sqlite_ret_ = sqlite3_bind_text(stmt, param_idx, val.c_str(), -1,
+  if ((sqlite_ret_ = sqlite3_bind_text(stmt_, param_idx, val.c_str(), -1,
                                        SQLITE_TRANSIENT)) != SQLITE_OK) {
     die_with_err("Unable bind string in statement", sqlite_ret_);
   }
@@ -173,7 +173,7 @@ void Sqlite_statement_manager::bind_in_param(int param_idx,
 
 template <>
 void Sqlite_statement_manager::bind_in_param(int param_idx, std::string &val) {
-  if ((sqlite_ret_ = sqlite3_bind_text(stmt, param_idx, val.c_str(), -1,
+  if ((sqlite_ret_ = sqlite3_bind_text(stmt_, param_idx, val.c_str(), -1,
                                        SQLITE_TRANSIENT)) != SQLITE_OK) {
     die_with_err("Unable bind string in statement", sqlite_ret_);
   }
@@ -182,7 +182,7 @@ void Sqlite_statement_manager::bind_in_param(int param_idx, std::string &val) {
 template <>
 void Sqlite_statement_manager::bind_in_param(int param_idx,
                                              std::filesystem::path &val) {
-  if ((sqlite_ret_ = sqlite3_bind_text(stmt, param_idx, val.c_str(), -1,
+  if ((sqlite_ret_ = sqlite3_bind_text(stmt_, param_idx, val.c_str(), -1,
                                        SQLITE_TRANSIENT)) != SQLITE_OK) {
     die_with_err("Unable path in statement", sqlite_ret_);
   }
@@ -190,14 +190,14 @@ void Sqlite_statement_manager::bind_in_param(int param_idx,
 
 template <>
 void Sqlite_statement_manager::bind_in_param(int param_idx, int32_t &val) {
-  if ((sqlite_ret_ = sqlite3_bind_int(stmt, param_idx, val)) != SQLITE_OK) {
+  if ((sqlite_ret_ = sqlite3_bind_int(stmt_, param_idx, val)) != SQLITE_OK) {
     die_with_err("Unable bind int in statement", sqlite_ret_);
   }
 }
 
 template <>
 void Sqlite_statement_manager::bind_in_param(int param_idx, int64_t &val) {
-  if ((sqlite_ret_ = sqlite3_bind_int64(stmt, param_idx, val)) != SQLITE_OK) {
+  if ((sqlite_ret_ = sqlite3_bind_int64(stmt_, param_idx, val)) != SQLITE_OK) {
     die_with_err("Unable bind int in statement", sqlite_ret_);
   }
 }
@@ -205,7 +205,7 @@ void Sqlite_statement_manager::bind_in_param(int param_idx, int64_t &val) {
 template <>
 void Sqlite_statement_manager::bind_in_param(int param_idx,
                                              const uint32_t &val) {
-  if ((sqlite_ret_ = sqlite3_bind_int(stmt, param_idx, val)) != SQLITE_OK) {
+  if ((sqlite_ret_ = sqlite3_bind_int(stmt_, param_idx, val)) != SQLITE_OK) {
     die_with_err("Unable bind int in statement", sqlite_ret_);
   }
 }
@@ -213,7 +213,7 @@ void Sqlite_statement_manager::bind_in_param(int param_idx,
 template <>
 void Sqlite_statement_manager::bind_in_param(int param_idx,
                                              const uint64_t &val) {
-  if ((sqlite_ret_ = sqlite3_bind_int64(stmt, param_idx, val)) != SQLITE_OK) {
+  if ((sqlite_ret_ = sqlite3_bind_int64(stmt_, param_idx, val)) != SQLITE_OK) {
     die_with_err("Unable bind int in statement", sqlite_ret_);
   }
 }
@@ -227,7 +227,7 @@ void Sqlite_statement_manager::bind_in_param(int param_idx,
     tmp += '\0';
   }
   tmp += '\0';
-  if ((sqlite_ret_ = sqlite3_bind_blob(stmt, param_idx, tmp.data(), tmp.size(),
+  if ((sqlite_ret_ = sqlite3_bind_blob(stmt_, param_idx, tmp.data(), tmp.size(),
                                        SQLITE_TRANSIENT)) != SQLITE_OK) {
     die_with_err("Unable bind raw command", sqlite_ret_);
   }
@@ -241,7 +241,7 @@ void Sqlite_statement_manager::bind_in_param(int param_idx, char **&val) {
     tmp += '\0';
   }
   tmp += '\0';
-  if ((sqlite_ret_ = sqlite3_bind_blob(stmt, param_idx, tmp.data(), tmp.size(),
+  if ((sqlite_ret_ = sqlite3_bind_blob(stmt_, param_idx, tmp.data(), tmp.size(),
                                        SQLITE_TRANSIENT)) != SQLITE_OK) {
     die_with_err("Unable bind env", sqlite_ret_);
   }

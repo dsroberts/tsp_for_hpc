@@ -12,7 +12,6 @@ public:
   Sqlite_statement_manager(sqlite3 *conn, std::string_view sql);
   Sqlite_statement_manager(sqlite3 *conn, std::string_view sql, bool dostep);
   ~Sqlite_statement_manager();
-  sqlite3_stmt *stmt;
   /*
   Output interface
   */
@@ -26,7 +25,7 @@ public:
   }
   template <typename... Targs> bool step_get(Targs &...Fargs) {
     int param_idx{0};
-    sqlite_ret_ = sqlite3_step(stmt);
+    sqlite_ret_ = sqlite3_step(stmt_);
     if (sqlite_ret_ != SQLITE_DONE && sqlite_ret_ != SQLITE_ROW) {
       exit_with_sqlite_err("SQLite step failed:\n", sql_, sqlite_ret_, conn_);
     }
@@ -47,6 +46,7 @@ public:
 private:
   const std::string_view sql_;
   int sqlite_ret_;
+  sqlite3_stmt *stmt_;
   sqlite3 *conn_;
   /*
   Output param binding
@@ -64,12 +64,12 @@ private:
   */
   template <typename T> void bind_in_param(int param_idx, T &val);
   void bind_in_params(int param_idx) {
-    sqlite_ret_ = sqlite3_step(stmt);
+    sqlite_ret_ = sqlite3_step(stmt_);
     if (sqlite_ret_ != SQLITE_DONE) {
       exit_with_sqlite_err("SQLite step for statement failed:\n", sql_,
                            sqlite_ret_, conn_);
     }
-    if ((sqlite_ret_ = sqlite3_reset(stmt)) != SQLITE_OK) {
+    if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
       exit_with_sqlite_err("SQLite rest failed:\n", sql_, sqlite_ret_, conn_);
     };
   }
