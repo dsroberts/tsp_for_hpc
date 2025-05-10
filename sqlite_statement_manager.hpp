@@ -14,10 +14,8 @@ public:
   ~Sqlite_statement_manager();
   sqlite3_stmt *stmt;
   /*
-  Output param binding
+  Output interface
   */
-  template <typename T> void bind_out_param(int param_idx, T &val);
-  void bind_out_params(int param_idx) {};
   template <typename... Targs>
   void step_get(bool must_have_row, Targs &...Fargs) {
     if (must_have_row && !step_get(Fargs...)) {
@@ -38,6 +36,23 @@ public:
     bind_out_params(param_idx, Fargs...);
     return true;
   }
+  /*
+  Input interface
+  */
+  template <typename... Targs> void step_put(Targs &...Fargs) {
+    int param_idx{1};
+    bind_in_params(param_idx, Fargs...);
+  }
+
+private:
+  const std::string_view sql_;
+  int sqlite_ret_;
+  sqlite3 *conn_;
+  /*
+  Output param binding
+  */
+  template <typename T> void bind_out_param(int param_idx, T &val);
+  void bind_out_params(int param_idx) {};
   template <typename T, typename... Targs>
   void bind_out_params(int param_idx, T &val, Targs &...Fargs) {
     bind_out_param(param_idx, val);
@@ -58,21 +73,11 @@ public:
       exit_with_sqlite_err("SQLite rest failed:\n", sql_, sqlite_ret_, conn_);
     };
   }
-  template <typename... Targs>
-  void step_put(Targs &...Fargs) {
-    int param_idx{1};
-    bind_in_params(param_idx, Fargs...);
-  }
   template <typename T, typename... Targs>
   void bind_in_params(int param_idx, T &val, Targs &...Fargs) {
     bind_in_param(param_idx, val);
     param_idx++;
     bind_in_params(param_idx, Fargs...);
   }
-
-private:
-  const std::string_view sql_;
-  int sqlite_ret_;
-  sqlite3 *conn_;
 };
 } // namespace tsp
