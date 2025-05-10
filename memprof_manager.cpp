@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <sqlite3.h>
-#include <string>
 #include <sys/types.h>
 #include <unistd.h>
 #include <utility>
@@ -26,37 +25,9 @@ void Memprof_Manager::memprof_update(int64_t time, std::vector<mem_data> data) {
     die_with_err("Attempted to write to database in read-only mode!", -1);
   }
   auto ssm = Sqlite_statement_manager(conn_, insert_memprof_data);
-  int sqlite_ret;
   for (const auto &proc : data) {
-    if ((sqlite_ret = sqlite3_bind_int64(ssm.stmt, 1, time)) != SQLITE_OK) {
-      die_with_err("Unable bind timestamp", sqlite_ret);
-    }
-    if ((sqlite_ret = sqlite3_bind_int(ssm.stmt, 2, proc.jobid)) != SQLITE_OK) {
-      die_with_err("Unable bind jobid", sqlite_ret);
-    }
-    if ((sqlite_ret = sqlite3_bind_int64(ssm.stmt, 3, proc.vmem)) !=
-        SQLITE_OK) {
-      die_with_err("Unable bind jobid", sqlite_ret);
-    }
-    if ((sqlite_ret = sqlite3_bind_int64(ssm.stmt, 4, proc.rss)) != SQLITE_OK) {
-      die_with_err("Unable bind jobid", sqlite_ret);
-    }
-    if ((sqlite_ret = sqlite3_bind_int64(ssm.stmt, 5, proc.pss)) != SQLITE_OK) {
-      die_with_err("Unable bind jobid", sqlite_ret);
-    }
-    if ((sqlite_ret = sqlite3_bind_int64(ssm.stmt, 6, proc.shared)) !=
-        SQLITE_OK) {
-      die_with_err("Unable bind jobid", sqlite_ret);
-    }
-    if ((sqlite_ret = sqlite3_bind_int64(ssm.stmt, 7, proc.swap)) !=
-        SQLITE_OK) {
-      die_with_err("Unable bind jobid", sqlite_ret);
-    }
-    if ((sqlite_ret = sqlite3_bind_int64(ssm.stmt, 8, proc.swap_pss)) !=
-        SQLITE_OK) {
-      die_with_err("Unable bind jobid", sqlite_ret);
-    }
-    ssm.step_and_reset();
+    ssm.step_put(time, proc.jobid, proc.vmem, proc.rss, proc.pss, proc.shared,
+                 proc.swap, proc.swap_pss);
   }
 }
 
@@ -67,9 +38,11 @@ Memprof_Manager::get_running_job_ids_and_pids() {
   }
   std::vector<std::pair<uint32_t, pid_t>> out;
   auto ssm = Sqlite_statement_manager(conn_, get_ids_and_pids);
-  while (ssm.step() != SQLITE_DONE) {
-    out.emplace_back(sqlite3_column_int(ssm.stmt, 0),
-                     sqlite3_column_int(ssm.stmt, 1));
+  uint32_t jobid;
+  pid_t pid;
+  while (ssm.step_get(jobid, pid)) {
+    // while (ssm.step() != SQLITE_DONE) {
+    out.emplace_back(jobid, pid);
   }
   return out;
 }

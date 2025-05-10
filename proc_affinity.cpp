@@ -71,9 +71,11 @@ std::vector<uint32_t> Proc_affinity::bind() {
 
   for (const auto &p : sibling_pids) {
     if (hwloc_get_proc_cpubind(topology_, p, cpuset_other, 0) == -1) {
-      error_string = std::format(
-          "Unable to get binding information from sibling pid {}", p);
-      return {};
+      std::cerr << std::format("WARNING: Unable to get binding information "
+                               "from sibling pid {}",
+                               p)
+                << std::endl;
+      continue;
     }
 
     if (hwloc_bitmap_andnot(cpuset_avail, cpuset_avail, cpuset_other) == -1) {

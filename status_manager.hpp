@@ -55,7 +55,7 @@ constexpr std::string_view db_initialise(
     // Create sibling_pids view
     "CREATE VIEW IF NOT EXISTS sibling_pids AS SELECT id,pid FROM jobs WHERE "
     "id IN ( SELECT id FROM job_details WHERE stime IS NOT NULL and etime IS "
-    "NULL);\0");
+    "NULL);");
 
 // Clean old entries
 constexpr std::string_view clean(
@@ -64,19 +64,41 @@ constexpr std::string_view clean(
     // Remove all jobs
     "DELETE FROM jobs; "
     // Reset sequences
-    "DELETE FROM sqlite_sequence;\0");
+    "DELETE FROM sqlite_sequence;");
+
+constexpr std::string_view insert_cmd_stmt(
+    "INSERT INTO jobs(uuid,command,command_raw,category,pid,slots) VALUES "
+    "(?,?,?,?,?,?);");
+
+constexpr std::string_view insert_qtime_stmt(
+    "INSERT INTO qtime(jobid,time) SELECT id,{} FROM jobs WHERE uuid = '{}';");
+
+constexpr std::string_view insert_stime_stmt(
+    "INSERT INTO stime(jobid,time) SELECT id,{} FROM jobs WHERE uuid = '{}';");
+
+constexpr std::string_view
+    insert_etime_stmt("INSERT INTO etime(jobid,exit_status,time) SELECT "
+                      "id,{},{} FROM jobs WHERE uuid= '{}';");
 
 constexpr std::string_view insert_output_stmt(
     "INSERT INTO job_output(jobid,stdout,stderr) VALUES (( SELECT id "
-    "FROM jobs WHERE uuid = ? ),?,?)\0");
+    "FROM jobs WHERE uuid = ? ),?,?);");
 
 constexpr std::string_view insert_start_state_stmt(
     "INSERT INTO start_state(jobid,cwd,environ) VALUES (( SELECT id FROM jobs "
-    "WHERE uuid = ? ),?,?)\0");
+    "WHERE uuid = ? ),?,?);");
+
+constexpr std::string_view
+    get_job_category_stmt("SELECT category,slots FROM jobs WHERE id = {};");
+
+constexpr std::string_view get_used_slots_stmt("SELECT s FROM used_slots;");
+
+constexpr std::string_view
+    get_sibling_pids_stmt("SELECT pid FROM sibling_pids WHERE pid != {};");
 
 constexpr std::string_view
     get_last_jobid_stmt("SELECT jobs.id FROM jobs LEFT JOIN qtime ON "
-                        "jobid = jobs.id ORDER BY time DESC LIMIT 1;\0");
+                        "jobid = jobs.id ORDER BY time DESC LIMIT 1;");
 
 constexpr std::string_view get_job_by_id_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
@@ -84,23 +106,23 @@ constexpr std::string_view get_job_by_id_stmt(
 
 constexpr std::string_view get_all_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
-    "FROM job_details\0");
+    "FROM job_details;");
 
 constexpr std::string_view get_failed_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
-    "FROM job_details WHERE exit_status IS NOT NULL AND exit_status != 0\0");
+    "FROM job_details WHERE exit_status IS NOT NULL AND exit_status != 0;");
 
 constexpr std::string_view get_queued_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
-    "FROM job_details WHERE stime IS NULL\0");
+    "FROM job_details WHERE stime IS NULL;");
 
 constexpr std::string_view get_finished_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
-    "FROM job_details WHERE exit_status IS NOT NULL\0");
+    "FROM job_details WHERE exit_status IS NOT NULL;");
 
 constexpr std::string_view get_running_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
-    "FROM job_details WHERE stime IS NOT NULL AND etime IS NULL\0");
+    "FROM job_details WHERE stime IS NOT NULL AND etime IS NULL;");
 
 constexpr std::string_view get_job_details_by_id_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status,uuid,slots,pid "
@@ -110,10 +132,10 @@ constexpr std::string_view
     get_job_output_stmt("SELECT {} FROM job_output WHERE jobid = {};");
 
 constexpr std::string_view
-    get_cmd_to_rerun_stmt("SELECT command_raw FROM jobs WHERE id = {}");
+    get_cmd_to_rerun_stmt("SELECT command_raw FROM jobs WHERE id = {};");
 
 constexpr std::string_view
-    get_state_stmt("SELECT cwd,environ FROM start_state WHERE jobid = {}");
+    get_state_stmt("SELECT cwd,environ FROM start_state WHERE jobid = {};");
 
 constexpr std::string_view
     get_extern_jobid_stmt("SELECT id FROM jobs WHERE uuid = '{}';");
@@ -137,10 +159,11 @@ struct job_details {
   std::optional<uint32_t> pid;
 };
 
+typedef std::pair<char **, std::string> ptr_array_w_buffer_t;
+
 struct prog_state {
-  char **env_ptrs;
+  ptr_array_w_buffer_t env;
   std::filesystem::path wd;
-  std::string env_buf;
 };
 
 class Status_Manager {
@@ -184,7 +207,9 @@ private:
   bool slots_set_;
   bool started_;
   bool finished_;
+  pid_t pid_;
   std::string gen_jobid();
   void open_db();
+  bool db_not_openable();
 };
 } // namespace tsp

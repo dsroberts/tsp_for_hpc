@@ -44,13 +44,12 @@ int do_timeout(Timeout_config conf) {
                          .count();
 
   for (;;) {
-
+    auto interval_start_time = now();
     auto running_procs =
         stat_ro.get_job_stats_by_category(ListCategory::running);
 
-    auto current_time = now();
     if (running_procs.size() == 0) {
-      if (current_time - last_idle > idle_timeout) {
+      if (interval_start_time - last_idle > idle_timeout) {
         if (conf.get_bool("verbose")) {
           std::cout << "Idle timeout: " << conf.get_int("idle_timeout")
                     << " seconds reached. Exiting" << std::endl;
@@ -58,7 +57,7 @@ int do_timeout(Timeout_config conf) {
         exit(EXIT_SUCCESS);
       }
     } else {
-      last_idle = current_time;
+      last_idle = interval_start_time;
     }
     if (conf.get_bool("verbose")) {
       std::cout << "Checking runtimes for " << running_procs.size() << " jobs."
@@ -78,7 +77,7 @@ int do_timeout(Timeout_config conf) {
         // or has finished
         continue;
       }
-      if (current_time - job.stime.value() >= job_timeout) {
+      if (interval_start_time - job.stime.value() >= job_timeout) {
         if (conf.get_bool("verbose")) {
           std::cout << "Job id: " << job.id << "\nCommand: " << job.cmd
                     << "\nHas exceeded runtime limit of "
@@ -96,7 +95,9 @@ int do_timeout(Timeout_config conf) {
         }
       }
     }
-    std::this_thread::sleep_for(polling_interval);
+    std::this_thread::sleep_for(
+        polling_interval -
+        std::chrono::microseconds(now() - interval_start_time));
   }
 }
 

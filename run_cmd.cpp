@@ -27,7 +27,7 @@ Run_cmd::Run_cmd(std::string serialised)
   auto end = serialised.find('\0');
   while (end != std::string::npos) {
     proc_to_run_.emplace_back(serialised.substr(start, end - start));
-    start = end+1;
+    start = end + 1;
     end = serialised.find('\0', start);
   }
   // Final element will be an empty string, so remove it
@@ -45,6 +45,8 @@ Run_cmd::~Run_cmd() {
   }
 }
 
+std::vector<std::string> Run_cmd::get() { return proc_to_run_; }
+
 std::string Run_cmd::print() {
   std::stringstream out;
   for (const auto &i : proc_to_run_) {
@@ -53,16 +55,6 @@ std::string Run_cmd::print() {
     }
   }
   return out.str();
-}
-
-std::string Run_cmd::serialise() {
-  auto out = std::string{};
-  for (const auto &i : proc_to_run_) {
-    out += i;
-    out += '\0';
-  }
-  out += '\0';
-  return out;
 }
 
 const char *Run_cmd::get_argv_0() { return proc_to_run_[0].c_str(); }

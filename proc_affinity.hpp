@@ -15,7 +15,7 @@ public:
   Proc_affinity(Status_Manager &sm, int32_t nslots, pid_t pid);
   ~Proc_affinity();
   std::vector<uint32_t> bind();
-  std::string_view error_string;
+  std::string error_string;
 
 private:
   Status_Manager &sm_;

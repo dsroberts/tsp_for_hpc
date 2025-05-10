@@ -150,9 +150,9 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
   if (rerun) {
     const auto ps = stat.get_state(config.get_int("rerun"));
     std::filesystem::current_path(ps.wd);
-    environ = ps.env_ptrs;
+    environ = ps.env.first;
   }
-  stat.store_state({environ, std::filesystem::current_path(), {}});
+  stat.store_state({{environ, {}}, std::filesystem::current_path()});
 
   int child_stat;
   int ret;
@@ -178,7 +178,6 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     handler.init_pipes();
     ret = execvp(cmd.get_argv_0(), cmd.get_argv());
     if (ret != 0) {
-      stat.job_end(-1);
       die_with_err(std::format("Error: could not exec {}",
                                std::string(cmd.get_argv_0())),
                    ret);

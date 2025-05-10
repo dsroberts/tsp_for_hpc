@@ -14,14 +14,14 @@ constexpr std::string_view memprof_init(
     "CREATE TABLE IF NOT EXISTS memprof (jobid INTEGER NOT NULL, time INTEGER, "
     "vmem INTEGER, rss INTEGER, pss INTEGER, shared INTEGER, swap INTEGER, "
     "swap_pss INTEGER, FOREIGN KEY(jobid) REFERENCES jobs(id) ON DELETE "
-    "CASCADE);\0");
+    "CASCADE);");
 
 constexpr std::string_view insert_memprof_data(
     "INSERT INTO memprof(time,jobid,vmem,rss,pss,shared,swap,swap_pss) "
-    "VALUES (?,?,?,?,?,?,?,?);\0");
+    "VALUES (?,?,?,?,?,?,?,?);");
 
 constexpr std::string_view
-    get_ids_and_pids("SELECT id,pid FROM sibling_pids;\0");
+    get_ids_and_pids("SELECT id,pid FROM sibling_pids;");
 
 class Memprof_Manager : public Status_Manager {
 public:

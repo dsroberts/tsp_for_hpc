@@ -6,8 +6,8 @@
 #include <unistd.h>
 
 #include "functions.hpp"
-#include "memprof_manager.hpp"
 #include "linux_proc_tools.hpp"
+#include "memprof_manager.hpp"
 
 namespace tsp {
 
@@ -40,14 +40,14 @@ int do_memprof(Memprof_config conf) {
           .count();
 
   for (;;) {
+    auto interval_start_time = now();
     auto running_procs = stat.get_running_job_ids_and_pids();
-    auto current_time = now();
     if (conf.get_bool("verbose")) {
       std::cout << "Checking memory usage for " << running_procs.size()
                 << " jobs." << std::endl;
     }
     if (running_procs.size() == 0) {
-      if (current_time - last_idle > idle_timeout) {
+      if (interval_start_time - last_idle > idle_timeout) {
         if (conf.get_bool("verbose")) {
           std::cout << "Idle timeout: " << conf.get_int("idle_timeout")
                     << " seconds reached. Exiting" << std::endl;
@@ -57,7 +57,7 @@ int do_memprof(Memprof_config conf) {
       std::vector<mem_data> to_store;
 
     } else {
-      last_idle = current_time;
+      last_idle = interval_start_time;
       auto pid_map = get_pid_map();
       std::vector<mem_data> to_store;
 
@@ -79,9 +79,11 @@ int do_memprof(Memprof_config conf) {
           parse_smaps(pids[i_pid], to_store.back());
         }
       }
-      stat.memprof_update(current_time, to_store);
+      stat.memprof_update(interval_start_time, to_store);
     }
-    std::this_thread::sleep_for(polling_interval);
+    std::this_thread::sleep_for(
+        polling_interval -
+        std::chrono::microseconds(now() - interval_start_time));
   }
 }
 
