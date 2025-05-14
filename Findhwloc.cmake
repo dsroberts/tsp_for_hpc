@@ -21,11 +21,11 @@ if (hwloc_INCLUDE_DIR)
       "  require += info_ver[argc];\n"
       "  return 0;\n"
       "}")
-    try_compile(WOKRED SOURCES "${_hwloc_TEST_DIR}/${_hwloc_TEST_SRC}"
+    try_compile(WORKED SOURCES "${_hwloc_TEST_DIR}/${_hwloc_TEST_SRC}"
       COPY_FILE ${_hwloc_TEST_DIR}/test_hwloc_version_c
     )
   endif()
-  if(${WORKED} EXISTS ${_hwloc_TEST_DIR}/test_hwloc_version_c)
+  if(${WORKED} AND EXISTS ${_hwloc_TEST_DIR}/test_hwloc_version_c)
   file(STRINGS ${_hwloc_TEST_DIR}/test_hwloc_version_c INFO_STRING
     REGEX "^INFO:"
   )
