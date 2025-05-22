@@ -14,23 +14,23 @@
 namespace tsp {
 
 void print_job_stdout(Status_Manager sm_ro, uint32_t id) {
-  auto details = sm_ro.get_job_details_by_id(id);
-  if (details.stat.status) {
-    std::cout << sm_ro.get_job_stdout(id);
-  } else {
-    std::ifstream stream{get_tmp() /
-                         (std::string(out_file_template) + details.uuid)};
+  auto out = sm_ro.get_job_stdout(id);
+  if (out.empty()) {
+    auto uuid = sm_ro.get_job_uuid(id);
+    std::ifstream stream{get_tmp() / (std::string(out_file_template) + uuid)};
     std::cout << stream.rdbuf();
+  } else {
+    std::cout << out;
   }
 };
 void print_job_stderr(Status_Manager sm_ro, uint32_t id) {
-  auto details = sm_ro.get_job_details_by_id(id);
-  if (details.stat.status) {
-    std::cout << sm_ro.get_job_stderr(id);
-  } else {
-    std::ifstream stream{get_tmp() /
-                         (std::string(err_file_template) + details.uuid)};
+  auto out = sm_ro.get_job_stderr(id);
+  if (out.empty()) {
+    auto uuid = sm_ro.get_job_uuid(id);
+    std::ifstream stream{get_tmp() / (std::string(err_file_template) + uuid)};
     std::cout << stream.rdbuf();
+  } else {
+    std::cout << out;
   }
 };
 void format_jobs_table(std::vector<tsp::job_stat> jobs) {
@@ -92,52 +92,52 @@ void print_job_detail(Status_Manager sm_ro, uint32_t id) {
   // Expects /etc/localtime to be symlink, therefore
   // broken on Gadi
   // Finished
-  std::string runtime{format_hh_mm_ss(info.stat.etime.value_or(now()) -
-                                      info.stat.stime.value_or(now()))};
-  if (!info.stat.stime) {
+  std::string runtime{
+      format_hh_mm_ss(info.etime.value_or(now()) - info.stime.value_or(now()))};
+  if (!info.stime) {
     std::cout << "Status: Queued\n";
-  } else if (!info.stat.etime) {
+  } else if (!info.etime) {
     std::cout << "Status: Running\n";
   } else {
-    std::cout << "Status: Finished with exit status "
-              << info.stat.status.value() << "\n";
+    std::cout << "Status: Finished with exit status " << info.status.value()
+              << "\n";
   }
-  std::cout << "Command: " << info.stat.cmd << "\n";
+  std::cout << "Command: " << info.cmd << "\n";
   std::cout << "Slots required: " << info.slots << "\n";
   std::chrono::system_clock::time_point qtp{
-      std::chrono::microseconds{info.stat.qtime}};
+      std::chrono::microseconds{info.qtime}};
   std::chrono::system_clock::time_point stp;
   std::chrono::system_clock::time_point etp;
-  if (info.stat.stime) {
+  if (info.stime) {
     stp = std::chrono::system_clock::time_point{
-        std::chrono::microseconds{info.stat.stime.value()}};
+        std::chrono::microseconds{info.stime.value()}};
   }
-  if (info.stat.etime) {
+  if (info.etime) {
     etp = std::chrono::system_clock::time_point{
-        std::chrono::microseconds{info.stat.etime.value()}};
+        std::chrono::microseconds{info.etime.value()}};
   }
 #ifdef __APPLE__
   // As of 2025/05 Apple clang does not support
   // https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0355r7.html
   std::cout << "Enqueue time: " << qtp << "\n";
-  if (info.stat.stime) {
+  if (info.stime) {
     std::cout << "Start time: " << stp << "\n";
   }
-  if (info.stat.etime) {
+  if (info.etime) {
     std::cout << "End time: " << etp << "\n";
   }
 #else
   auto tz = std::chrono::get_tzdb().current_zone();
   std::cout << "Enqueue time: " << tz->to_local(qtp) << "\n";
-  if (info.stat.stime) {
+  if (info.stime) {
     std::cout << "Start time: " << tz->to_local(stp) << "\n";
   }
-  if (info.stat.etime) {
+  if (info.etime) {
     std::cout << "End time: " << tz->to_local(etp) << "\n";
   }
 
 #endif
-  if (info.stat.stime) {
+  if (info.stime) {
     std::cout << "Time run: " << runtime << "\n";
     std::cout << "TSP process pid: " << info.pid.value() << "\n";
   }

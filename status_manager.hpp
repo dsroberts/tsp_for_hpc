@@ -14,7 +14,7 @@
 #include "run_cmd.hpp"
 
 namespace tsp {
-const std::string db_name("tsp_db.sqlite3");
+constexpr std::string_view db_name("tsp_db.sqlite3");
 constexpr std::string_view db_initialise(
     // Ensure foreign keys are respected
     "PRAGMA foreign_keys = ON;"
@@ -71,14 +71,14 @@ constexpr std::string_view insert_cmd_stmt(
     "(?,?,?,?,?,?);");
 
 constexpr std::string_view insert_qtime_stmt(
-    "INSERT INTO qtime(jobid,time) SELECT id,{} FROM jobs WHERE uuid = '{}';");
+    "INSERT INTO qtime(jobid,time) SELECT id,? FROM jobs WHERE uuid = ?;");
 
 constexpr std::string_view insert_stime_stmt(
-    "INSERT INTO stime(jobid,time) SELECT id,{} FROM jobs WHERE uuid = '{}';");
+    "INSERT INTO stime(jobid,time) SELECT id,? FROM jobs WHERE uuid = ?;");
 
 constexpr std::string_view
     insert_etime_stmt("INSERT INTO etime(jobid,exit_status,time) SELECT "
-                      "id,{},{} FROM jobs WHERE uuid= '{}';");
+                      "id,?,? FROM jobs WHERE uuid = ?;");
 
 constexpr std::string_view insert_output_stmt(
     "INSERT INTO job_output(jobid,stdout,stderr) VALUES (( SELECT id "
@@ -89,12 +89,12 @@ constexpr std::string_view insert_start_state_stmt(
     "WHERE uuid = ? ),?,?);");
 
 constexpr std::string_view
-    get_job_category_stmt("SELECT category,slots FROM jobs WHERE id = {};");
+    get_job_category_stmt("SELECT category,slots FROM jobs WHERE id = ?;");
 
 constexpr std::string_view get_used_slots_stmt("SELECT s FROM used_slots;");
 
 constexpr std::string_view
-    get_sibling_pids_stmt("SELECT pid FROM sibling_pids WHERE pid != {};");
+    get_sibling_pids_stmt("SELECT pid FROM sibling_pids WHERE pid != ?;");
 
 constexpr std::string_view
     get_last_jobid_stmt("SELECT jobs.id FROM jobs LEFT JOIN qtime ON "
@@ -102,7 +102,7 @@ constexpr std::string_view
 
 constexpr std::string_view get_job_by_id_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
-    "FROM job_details WHERE id = {};");
+    "FROM job_details WHERE id = ?;");
 
 constexpr std::string_view get_all_jobs_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status "
@@ -126,19 +126,24 @@ constexpr std::string_view get_running_jobs_stmt(
 
 constexpr std::string_view get_job_details_by_id_stmt(
     "SELECT id,command,category,qtime,stime,etime,exit_status,uuid,slots,pid "
-    "FROM job_details WHERE id = {};");
+    "FROM job_details WHERE id = ?;");
 
 constexpr std::string_view
-    get_job_output_stmt("SELECT {} FROM job_output WHERE jobid = {};");
+    get_job_stdout_stmt("SELECT stdout FROM job_output WHERE jobid = ?;");
 
 constexpr std::string_view
-    get_cmd_to_rerun_stmt("SELECT command_raw FROM jobs WHERE id = {};");
+    get_job_stderr_stmt("SELECT stderr FROM job_output WHERE jobid = ?;");
 
 constexpr std::string_view
-    get_state_stmt("SELECT cwd,environ FROM start_state WHERE jobid = {};");
+    get_cmd_to_rerun_stmt("SELECT command_raw FROM jobs WHERE id = ?;");
 
 constexpr std::string_view
-    get_extern_jobid_stmt("SELECT id FROM jobs WHERE uuid = '{}';");
+    get_state_stmt("SELECT cwd,environ FROM start_state WHERE jobid = ?;");
+
+constexpr std::string_view
+    get_extern_jobid_stmt("SELECT id FROM jobs WHERE uuid = ?;");
+
+constexpr std::string_view get_uuid_stmt("SELECT uuid FROM jobs WHERE id = ?;");
 
 enum class ListCategory { none, all, failed, queued, running, finished };
 
@@ -153,7 +158,13 @@ struct job_stat {
 };
 
 struct job_details {
-  job_stat stat;
+  uint32_t id;
+  std::string cmd;
+  std::optional<std::string> category;
+  int64_t qtime;
+  std::optional<int64_t> stime;
+  std::optional<int64_t> etime;
+  std::optional<int32_t> status;
   std::string uuid;
   int32_t slots;
   std::optional<uint32_t> pid;
@@ -162,8 +173,8 @@ struct job_details {
 typedef std::pair<char **, std::string> ptr_array_w_buffer_t;
 
 struct prog_state {
-  ptr_array_w_buffer_t env;
   std::filesystem::path wd;
+  ptr_array_w_buffer_t env;
 };
 
 class Status_Manager {
@@ -188,6 +199,7 @@ public:
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
   uint32_t get_extern_jobid();
+  std::string get_job_uuid(uint32_t id);
   std::string get_cmd_to_rerun(uint32_t id);
   prog_state get_state(uint32_t id);
   void store_state(prog_state);

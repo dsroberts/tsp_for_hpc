@@ -147,12 +147,13 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     cmd.add_rankfile(bound_cores, config.get_int("nslots"));
   }
 
+  prog_state ps;
   if (rerun) {
-    const auto ps = stat.get_state(config.get_int("rerun"));
+    ps = stat.get_state(config.get_int("rerun"));
     std::filesystem::current_path(ps.wd);
     environ = ps.env.first;
   }
-  stat.store_state({{environ, {}}, std::filesystem::current_path()});
+  stat.store_state({std::filesystem::current_path(), {environ, {}}});
 
   int child_stat;
   int ret;

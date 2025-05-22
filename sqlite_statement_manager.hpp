@@ -1,83 +1,103 @@
 #pragma once
 
+#include <optional>
 #include <sqlite3.h>
 #include <string_view>
+#include <tuple>
+
+#include <iostream>
 
 namespace tsp {
 
-void exit_with_sqlite_err(const char *msg, std::string_view sql, int ret,
+constexpr int sql_param_out = 0;
+constexpr int sql_param_in = 1;
+
+void exit_with_sqlite_err(std::string_view msg, int ret, std::string_view stmt,
+                          sqlite3 *conn);
+void exit_with_sqlite_err(std::string_view msg, int ret, sqlite3_stmt *stmt,
                           sqlite3 *conn);
 class Sqlite_statement_manager {
 public:
   Sqlite_statement_manager(sqlite3 *conn, std::string_view sql);
-  Sqlite_statement_manager(sqlite3 *conn, std::string_view sql, bool dostep);
   ~Sqlite_statement_manager();
   /*
-  Output interface
+  I/O interface
   */
-  template <typename... Targs>
-  void step_get(bool must_have_row, Targs &...Fargs) {
-    if (must_have_row && !step_get(Fargs...)) {
-      exit_with_sqlite_err(
-          "Statement was expected to return results but did not:\n", sql_,
-          sqlite_ret_, conn_);
+  template <typename... Oargs, typename... Iargs>
+  auto step(Iargs &&...InParams) {
+    if (sqlite_ret_ != SQLITE_ROW) {
+      if constexpr (sizeof...(InParams) > 0) {
+        auto tup = std::make_tuple(InParams...);
+        bind_params<sql_param_in, 0, sizeof...(InParams)>(tup);
+      }
     }
-  }
-  template <typename... Targs> bool step_get(Targs &...Fargs) {
-    int param_idx{0};
     sqlite_ret_ = sqlite3_step(stmt_);
     if (sqlite_ret_ != SQLITE_DONE && sqlite_ret_ != SQLITE_ROW) {
-      exit_with_sqlite_err("SQLite step failed:\n", sql_, sqlite_ret_, conn_);
+      exit_with_sqlite_err("SQLite step failed:", sqlite_ret_, stmt_, conn_);
     }
-    if (sqlite_ret_ == SQLITE_DONE) {
-      return false;
+    if constexpr (sizeof...(Oargs) == 0) {
+      if (sqlite_ret_ == SQLITE_DONE) {
+        if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
+          exit_with_sqlite_err("SQLite reset failed:", sqlite_ret_, stmt_,
+                               conn_);
+        }
+      }
+      return;
+    } else if constexpr (sizeof...(Oargs) == 1) {
+      std::optional<Oargs...> out;
+      if (sqlite_ret_ == SQLITE_ROW) {
+        std::tuple<Oargs...> tmp;
+        bind_params<sql_param_out, 0, 1>(tmp);
+        out = std::get<0>(tmp);
+      }
+      if (sqlite_ret_ == SQLITE_DONE) {
+        if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
+          exit_with_sqlite_err("SQLite reset failed:", sqlite_ret_, stmt_,
+                               conn_);
+        }
+      }
+      return out;
+    } else {
+      std::optional<std::tuple<Oargs...>> out;
+      if (sqlite_ret_ == SQLITE_ROW) {
+        std::tuple<Oargs...> tmp;
+        bind_params<sql_param_out, 0, sizeof...(Oargs)>(tmp);
+        out = tmp;
+      }
+      if (sqlite_ret_ == SQLITE_DONE) {
+        if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
+          exit_with_sqlite_err("SQLite reset failed:", sqlite_ret_, stmt_,
+                               conn_);
+        }
+      }
+      return out;
     }
-    bind_out_params(param_idx, Fargs...);
-    return true;
   }
-  /*
-  Input interface
-  */
-  template <typename... Targs> void step_put(Targs &...Fargs) {
-    int param_idx{1};
-    bind_in_params(param_idx, Fargs...);
+
+  template <typename... Oargs, typename... Iargs>
+  auto fetch_one(Iargs &&...InParams) {
+    static_assert(sizeof...(Oargs) > 0,
+                  "Cannot use fetch_one with no output parameters provided");
+    auto tmp = step<Oargs...>(InParams...);
+    if (!tmp) {
+      exit_with_sqlite_err("No result matching this statement was found",
+                           sqlite_ret_, stmt_, conn_);
+    }
+    return tmp.value();
   }
 
 private:
-  const std::string_view sql_;
   int sqlite_ret_;
   sqlite3_stmt *stmt_;
   sqlite3 *conn_;
-  /*
-  Output param binding
-  */
-  template <typename T> void bind_out_param(int param_idx, T &val);
-  void bind_out_params(int param_idx) {};
-  template <typename T, typename... Targs>
-  void bind_out_params(int param_idx, T &val, Targs &...Fargs) {
-    bind_out_param(param_idx, val);
-    param_idx++;
-    bind_out_params(param_idx, Fargs...);
-  }
-  /*
-  Input param binding
-  */
-  template <typename T> void bind_in_param(int param_idx, T &val);
-  void bind_in_params(int param_idx) {
-    sqlite_ret_ = sqlite3_step(stmt_);
-    if (sqlite_ret_ != SQLITE_DONE) {
-      exit_with_sqlite_err("SQLite step for statement failed:\n", sql_,
-                           sqlite_ret_, conn_);
+  template <int I, typename T> void bind_param(int param_idx, T &val);
+  template <int I, size_t J, size_t Size, typename... Targs>
+  void bind_params(std::tuple<Targs...> &args) {
+    // sqlite input parameter indices start at 1
+    bind_param<I>(J + I, std::get<J>(args));
+    if constexpr (J < Size - 1) {
+      bind_params<I, J + 1, Size>(args);
     }
-    if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
-      exit_with_sqlite_err("SQLite rest failed:\n", sql_, sqlite_ret_, conn_);
-    };
-  }
-  template <typename T, typename... Targs>
-  void bind_in_params(int param_idx, T &val, Targs &...Fargs) {
-    bind_in_param(param_idx, val);
-    param_idx++;
-    bind_in_params(param_idx, Fargs...);
   }
 };
 } // namespace tsp

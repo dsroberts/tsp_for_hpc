@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 set(HWLOC_MIN_VERSION 2.5.0)
+set(SQLITE_MIN_VERSION 3.14)
 
 project(
     tsp_for_hpc
@@ -10,7 +11,7 @@ if (hwloc_VERSION VERSION_LESS ${HWLOC_MIN_VERSION})
     message(FATAL_ERROR "hwloc version ${hwloc_VERSION} is less than the minimum required: ${HWLOC_MIN_VERSION}")
 endif ()
 
-find_package(SQLite3 REQUIRED)
+find_package(SQLite3 ${SQLITE_MIN_VERSION} REQUIRED)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
