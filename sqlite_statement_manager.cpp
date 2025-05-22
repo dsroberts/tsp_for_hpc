@@ -12,26 +12,25 @@
 
 namespace tsp {
 
-void exit_with_sqlite_err(std::string_view msg, int ret, std::string_view stmt,
-                          sqlite3 *conn) {
+void exit_with_sqlite_err(std::string_view msg, int ret,
+                          std::string_view stmt) {
 
   std::cerr << msg << std::endl;
   if (!stmt.empty()) {
     std::cerr << stmt << std::endl;
   }
   std::cerr << ret << ": ";
-  std::cerr << sqlite3_errmsg(conn) << std::endl;
+  std::cerr << sqlite3_errstr(ret) << std::endl;
   std::exit(EXIT_FAILURE);
 }
 
-void exit_with_sqlite_err(std::string_view msg, int ret, sqlite3_stmt *stmt,
-                          sqlite3 *conn) {
+void exit_with_sqlite_err(std::string_view msg, int ret, sqlite3_stmt *stmt) {
 
   std::string_view sql;
   if (stmt) {
     sql = sqlite3_expanded_sql(stmt);
   }
-  exit_with_sqlite_err(msg, ret, sql, conn);
+  exit_with_sqlite_err(msg, ret, sql);
 }
 
 Sqlite_statement_manager::Sqlite_statement_manager(sqlite3 *conn,
@@ -39,15 +38,14 @@ Sqlite_statement_manager::Sqlite_statement_manager(sqlite3 *conn,
     : sqlite_ret_(SQLITE_OK), conn_(conn) {
   if ((sqlite_ret_ = sqlite3_prepare_v2(conn_, sql.data(), sql.length(), &stmt_,
                                         nullptr)) != SQLITE_OK) {
-    exit_with_sqlite_err("Could not prepare the following sql statement:",
-                         sqlite_ret_, sql, conn_);
+    exit_with_sqlite_err(
+        "Could not prepare the following sql statement:", sqlite_ret_, sql);
   }
 }
 
 Sqlite_statement_manager::~Sqlite_statement_manager() {
   if ((sqlite_ret_ = sqlite3_finalize(stmt_)) != SQLITE_OK) {
-    exit_with_sqlite_err("Unable finalize statement:", sqlite_ret_, stmt_,
-                         conn_);
+    exit_with_sqlite_err("Unable finalize statement:", sqlite_ret_, stmt_);
   };
 }
 

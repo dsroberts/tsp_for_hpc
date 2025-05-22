@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 set(HWLOC_MIN_VERSION 2.5.0)
-set(SQLITE_MIN_VERSION 3.14)
+set(SQLITE_MIN_VERSION 3.14.0)
 
 project(
     tsp_for_hpc

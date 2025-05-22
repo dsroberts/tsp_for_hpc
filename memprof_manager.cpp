@@ -16,7 +16,7 @@ Memprof_Manager::Memprof_Manager() : Status_Manager() {
   char *sqlite_err;
   if ((sqlite_ret = sqlite3_exec(conn_, memprof_init.data(), nullptr, nullptr,
                                  &sqlite_err)) != SQLITE_OK) {
-    exit_with_sqlite_err(sqlite_err, sqlite_ret, memprof_init, conn_);
+    exit_with_sqlite_err(sqlite_err, sqlite_ret, memprof_init);
   }
 }
 

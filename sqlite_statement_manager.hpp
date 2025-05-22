@@ -12,10 +12,8 @@ namespace tsp {
 constexpr int sql_param_out = 0;
 constexpr int sql_param_in = 1;
 
-void exit_with_sqlite_err(std::string_view msg, int ret, std::string_view stmt,
-                          sqlite3 *conn);
-void exit_with_sqlite_err(std::string_view msg, int ret, sqlite3_stmt *stmt,
-                          sqlite3 *conn);
+void exit_with_sqlite_err(std::string_view msg, int ret, std::string_view stmt);
+void exit_with_sqlite_err(std::string_view msg, int ret, sqlite3_stmt *stmt);
 class Sqlite_statement_manager {
 public:
   Sqlite_statement_manager(sqlite3 *conn, std::string_view sql);
@@ -33,42 +31,28 @@ public:
     }
     sqlite_ret_ = sqlite3_step(stmt_);
     if (sqlite_ret_ != SQLITE_DONE && sqlite_ret_ != SQLITE_ROW) {
-      exit_with_sqlite_err("SQLite step failed:", sqlite_ret_, stmt_, conn_);
+      exit_with_sqlite_err("SQLite step failed:", sqlite_ret_, stmt_);
     }
-    if constexpr (sizeof...(Oargs) == 0) {
-      if (sqlite_ret_ == SQLITE_DONE) {
-        if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
-          exit_with_sqlite_err("SQLite reset failed:", sqlite_ret_, stmt_,
-                               conn_);
-        }
+    if (sqlite_ret_ == SQLITE_DONE) {
+      if (auto reset_stat = sqlite3_reset(stmt_) != SQLITE_OK) {
+        exit_with_sqlite_err("SQLite reset failed:", reset_stat, stmt_);
       }
+    }
+    std::tuple<Oargs...> tmp;
+    if constexpr (sizeof...(Oargs) == 0) {
       return;
     } else if constexpr (sizeof...(Oargs) == 1) {
       std::optional<Oargs...> out;
       if (sqlite_ret_ == SQLITE_ROW) {
-        std::tuple<Oargs...> tmp;
-        bind_params<sql_param_out, 0, 1>(tmp);
+        bind_params<sql_param_out, 0, sizeof...(Oargs)>(tmp);
         out = std::get<0>(tmp);
-      }
-      if (sqlite_ret_ == SQLITE_DONE) {
-        if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
-          exit_with_sqlite_err("SQLite reset failed:", sqlite_ret_, stmt_,
-                               conn_);
-        }
       }
       return out;
     } else {
       std::optional<std::tuple<Oargs...>> out;
       if (sqlite_ret_ == SQLITE_ROW) {
-        std::tuple<Oargs...> tmp;
         bind_params<sql_param_out, 0, sizeof...(Oargs)>(tmp);
         out = tmp;
-      }
-      if (sqlite_ret_ == SQLITE_DONE) {
-        if ((sqlite_ret_ = sqlite3_reset(stmt_)) != SQLITE_OK) {
-          exit_with_sqlite_err("SQLite reset failed:", sqlite_ret_, stmt_,
-                               conn_);
-        }
       }
       return out;
     }
@@ -81,7 +65,7 @@ public:
     auto tmp = step<Oargs...>(InParams...);
     if (!tmp) {
       exit_with_sqlite_err("No result matching this statement was found",
-                           sqlite_ret_, stmt_, conn_);
+                           sqlite_ret_, stmt_);
     }
     return tmp.value();
   }
