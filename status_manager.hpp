@@ -20,8 +20,8 @@ constexpr std::string_view db_initialise(
     "PRAGMA foreign_keys = ON;"
     // Create command table
     "CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-    "uuid TEXT, command TEXT, command_raw BLOB, category TEXT, pid INTEGER, "
-    "slots INTEGER);"
+    "uuid TEXT UNIQUE, command TEXT, command_raw BLOB, category TEXT, pid "
+    "INTEGER, slots INTEGER);"
     // Create queue time table
     "CREATE TABLE IF NOT EXISTS qtime (id INTEGER PRIMARY KEY AUTOINCREMENT, "
     "jobid INTEGER NOT NULL, time INTEGER, FOREIGN KEY(jobid) REFERENCES "
@@ -42,6 +42,11 @@ constexpr std::string_view db_initialise(
     "CREATE TABLE IF NOT EXISTS job_output ( jobid INTEGER UNIQUE NOT NULL, "
     "stdout TEXT, stderr TEXT, FOREIGN KEY(jobid) REFERENCES jobs(id) ON "
     "DELETE CASCADE);"
+    // Create integer_sequence table
+    "CREATE TABLE IF NOT EXISTS integer_sequence( slot INTEGER UNIQUE );"
+    // Create used_slots table
+    "CREATE TABLE IF NOT EXISTS used_slots( uuid TEXT NOT NULL, slot INTEGER, "
+    "FOREIGN KEY(uuid) REFERENCES jobs(uuid) ON DELETE CASCADE);"
     // Create job_details view
     "CREATE VIEW IF NOT EXISTS job_details AS SELECT jobs.id AS "
     "id,uuid,command,category,pid,slots,qtime.time AS qtime,"
@@ -49,9 +54,10 @@ constexpr std::string_view db_initialise(
     "AS exit_status FROM jobs LEFT JOIN qtime ON "
     "jobs.id=qtime.jobid LEFT JOIN stime ON jobs.id=stime.jobid "
     "LEFT JOIN etime ON jobs.id=etime.jobid;"
-    // Create used_slots view
-    "CREATE VIEW IF NOT EXISTS used_slots AS SELECT IFNULL(SUM(slots),0) as s "
-    "FROM job_details WHERE stime IS NOT NULL AND etime IS NULL;"
+    // Create slots_in_use view
+    "CREATE VIEW IF NOT EXISTS slots_in_use AS SELECT used_slots.uuid AS "
+    "uuid,slot FROM jobs LEFT JOIN used_slots ON jobs.uuid = used_slots.uuid "
+    "LEFT JOIN etime ON jobs.id = etime.jobid WHERE etime.time IS NULL;"
     // Create sibling_pids view
     "CREATE VIEW IF NOT EXISTS sibling_pids AS SELECT id,pid FROM jobs WHERE "
     "id IN ( SELECT id FROM job_details WHERE stime IS NOT NULL and etime IS "
@@ -61,14 +67,31 @@ constexpr std::string_view db_initialise(
 constexpr std::string_view clean(
     // Ensure foreign keys are respected
     "PRAGMA foreign_keys = ON; "
+    // Remove integer sequence
+    "DELETE FROM integer_sequence; "
     // Remove all jobs
     "DELETE FROM jobs; "
     // Reset sequences
     "DELETE FROM sqlite_sequence;");
 
+constexpr std::string_view create_integer_sequence_stmt(
+    "WITH RECURSIVE generate_series(value) AS ( SELECT 0 UNION ALL SELECT "
+    "value+1 FROM generate_series WHERE value+1 < ? ) INSERT OR IGNORE INTO "
+    "integer_sequence SELECT value FROM generate_series;");
+
 constexpr std::string_view insert_cmd_stmt(
     "INSERT INTO jobs(uuid,command,command_raw,category,pid,slots) VALUES "
     "(?,?,?,?,?,?);");
+
+constexpr std::string_view insert_proc_allocation_stmt(
+    "WITH avail_slots AS ( SELECT seq.slot FROM integer_sequence seq LEFT JOIN "
+    "slots_in_use si ON seq.slot = si.slot WHERE si.slot IS NULL AND seq.slot "
+    "< ?) INSERT INTO used_slots(uuid,slot) SELECT ?,slot FROM avail_slots "
+    "WHERE ( SELECT COUNT(*) FROM avail_slots ) > ? ORDER BY slot ASC LIMIT "
+    "?;");
+
+constexpr std::string_view recover_proc_allocation_stmt(
+    "SELECT slot FROM slots_in_use WHERE uuid = ?;");
 
 constexpr std::string_view insert_qtime_stmt(
     "INSERT INTO qtime(jobid,time) SELECT id,? FROM jobs WHERE uuid = ?;");
@@ -90,8 +113,6 @@ constexpr std::string_view insert_start_state_stmt(
 
 constexpr std::string_view
     get_job_category_stmt("SELECT category,slots FROM jobs WHERE id = ?;");
-
-constexpr std::string_view get_used_slots_stmt("SELECT s FROM used_slots;");
 
 constexpr std::string_view
     get_sibling_pids_stmt("SELECT pid FROM sibling_pids WHERE pid != ?;");
@@ -187,11 +208,12 @@ public:
   void set_total_slots(int32_t total_slots);
   void add_cmd(Run_cmd &cmd, std::string category, int32_t slots);
   void add_cmd(Run_cmd &cmd, uint32_t id);
+  void insert_proc_allocation();
+  std::vector<uint32_t> recover_proc_allocation();
   void job_start();
   void job_end(int exit_stat);
   void save_output(const std::pair<std::string, std::string> &in);
   std::vector<pid_t> get_running_job_pids(pid_t excl);
-  bool allowed_to_run();
   uint32_t get_last_job_id();
   job_stat get_job_by_id(uint32_t id);
   job_details get_job_details_by_id(uint32_t id);

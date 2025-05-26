@@ -15,7 +15,6 @@
 #include "functions.hpp"
 #include "help.hpp"
 #include "jitter.hpp"
-#include "locker.hpp"
 #include "output_manager.hpp"
 #include "proc_affinity.hpp"
 #include "status_manager.hpp"
@@ -108,27 +107,33 @@ int do_spooler(Spooler_config config, int argc, int optind, char *argv[]) {
     die_with_err(binder.error_string, -1);
   }
   std::vector<uint32_t> bound_cores;
-  {
-    auto locker = tsp::Locker();
-    for (;;) {
-      if (time_to_die) {
-        stat.job_end(128 + seen_signal);
-        std::exit(EXIT_FAILURE);
-      }
-      locker.lock();
-      if (stat.allowed_to_run()) {
-        break;
-      }
-      locker.unlock();
-      std::this_thread::sleep_for(base_wait_period + jitter.get());
+
+  for (;;) {
+    if (time_to_die) {
+      stat.job_end(128 + seen_signal);
+      std::exit(EXIT_FAILURE);
     }
-    stat.job_start();
-    if (config.get_bool("binding")) {
-      bound_cores = binder.bind();
-      if (!binder.error_string.empty()) {
-        stat.job_end(-1);
-        die_with_err_errno(binder.error_string, -1);
-      }
+    stat.insert_proc_allocation();
+    if (config.get_bool("verbose")) {
+      std::cout << "Job id " << extern_jobid << ": " << cmd.print()
+                << "requesting core binding allocation\n";
+    }
+    bound_cores = stat.recover_proc_allocation();
+    if (!bound_cores.empty()) {
+      break;
+    }
+    if (config.get_bool("verbose")) {
+      std::cout << "Job id " << extern_jobid << ": " << cmd.print()
+                << "Insufficient available cores - waiting\n";
+    }
+    std::this_thread::sleep_for(base_wait_period + jitter.get());
+  }
+  stat.job_start();
+  if (config.get_bool("binding")) {
+    binder.bind(bound_cores);
+    if (!binder.error_string.empty()) {
+      stat.job_end(-1);
+      die_with_err_errno(binder.error_string, -1);
     }
   }
 

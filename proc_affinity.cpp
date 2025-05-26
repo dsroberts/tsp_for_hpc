@@ -44,7 +44,6 @@ Proc_affinity::Proc_affinity(Status_Manager &sm, int32_t nslots, pid_t pid)
                    "process can never run.";
     return;
   }
-  cpuset_all_ = hwloc_topology_get_topology_cpuset(topology_);
   if ((cpuset_mine_ = hwloc_bitmap_alloc()) == nullptr) {
     error_string = "Unable to allocate hwloc bitmap for this process's cpuset";
     return;
@@ -56,42 +55,12 @@ Proc_affinity::~Proc_affinity() {
   hwloc_topology_destroy(topology_);
 }
 
-std::vector<uint32_t> Proc_affinity::bind() {
-  auto sibling_pids = get_siblings();
-  hwloc_bitmap_t cpuset_avail;
-  hwloc_bitmap_t cpuset_other;
-  if ((cpuset_avail = hwloc_bitmap_dup(cpuset_all_)) == nullptr) {
-    error_string = "Unable to allocate hwloc bitmap for cpuset";
-    return {};
-  }
-  if ((cpuset_other = hwloc_bitmap_alloc()) == nullptr) {
-    error_string = "Unable to allocate temporary hwloc bitmap";
-    return {};
-  }
+void Proc_affinity::bind(std::vector<uint32_t> in) {
 
-  for (const auto &p : sibling_pids) {
-    if (hwloc_get_proc_cpubind(topology_, p, cpuset_other, 0) == -1) {
-      std::cerr << std::format("WARNING: Unable to get binding information "
-                               "from sibling pid {}",
-                               p)
-                << std::endl;
-      continue;
-    }
-
-    if (hwloc_bitmap_andnot(cpuset_avail, cpuset_avail, cpuset_other) == -1) {
-      error_string = "Unable to construct available processor map";
-      return {};
-    }
-  }
-
-  std::vector<uint32_t> out;
-  auto prev = -1;
-  for (auto i = 0l; i < nslots_; ++i) {
-    prev = hwloc_bitmap_next(cpuset_avail, prev);
-    out.push_back(prev);
-    if (hwloc_bitmap_set(cpuset_mine_, prev) == -1) {
+  for (const auto i : in) {
+    if (hwloc_bitmap_set(cpuset_mine_, i) == -1) {
       error_string = "Unable to construct process binding bitmap";
-      return {};
+      return;
     }
   }
 
@@ -99,13 +68,10 @@ std::vector<uint32_t> Proc_affinity::bind() {
                         HWLOC_CPUBIND_PROCESS | HWLOC_CPUBIND_NOMEMBIND |
                             HWLOC_CPUBIND_STRICT) == -1) {
     error_string = "Unable to bind process";
-    return {};
+    return;
   }
 
-  hwloc_bitmap_free(cpuset_avail);
-  hwloc_bitmap_free(cpuset_other);
-
-  return out;
+  return;
 }
 
 std::vector<pid_t> Proc_affinity::get_siblings() {

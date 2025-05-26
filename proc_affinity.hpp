@@ -14,13 +14,12 @@ class Proc_affinity {
 public:
   Proc_affinity(Status_Manager &sm, int32_t nslots, pid_t pid);
   ~Proc_affinity();
-  std::vector<uint32_t> bind();
+  void bind(std::vector<uint32_t> in);
   std::string error_string;
 
 private:
   Status_Manager &sm_;
   hwloc_topology_t topology_;
-  hwloc_const_bitmap_t cpuset_all_;
   hwloc_bitmap_t cpuset_mine_;
   const int32_t nslots_;
   const pid_t pid_;

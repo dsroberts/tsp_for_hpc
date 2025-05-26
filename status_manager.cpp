@@ -43,6 +43,8 @@ void Status_Manager::set_total_slots(int32_t total_slots) {
         "Error! Attempted to set total number of available cores twice!", -1);
   }
   total_slots_ = total_slots;
+  Sqlite_statement_manager(conn_, create_integer_sequence_stmt)
+      .step(total_slots);
   slots_set_ = true;
 }
 
@@ -102,6 +104,14 @@ void Status_Manager::add_cmd(Run_cmd &cmd, uint32_t id) {
   Sqlite_statement_manager(conn_, insert_qtime_stmt).step(qtime, jobid);
 }
 
+void Status_Manager::insert_proc_allocation() {
+  if (!rw_) {
+    die_with_err("Attempted to write to database in read-only mode!", -1);
+  }
+  Sqlite_statement_manager(conn_, insert_proc_allocation_stmt)
+      .step(total_slots_, jobid, slots_req_, slots_req_);
+}
+
 void Status_Manager::job_start() {
   if (!rw_) {
     die_with_err("Attempted to write to database in read-only mode!", -1);
@@ -152,13 +162,16 @@ bool Status_Manager::db_not_openable() {
   return false;
 }
 
-bool Status_Manager::allowed_to_run() {
+std::vector<uint32_t> Status_Manager::recover_proc_allocation() {
   if (db_not_openable()) {
     return {};
   }
-  auto slots_used =
-      Sqlite_statement_manager(conn_, get_used_slots_stmt).fetch_one<int32_t>();
-  return (total_slots_ - slots_used) >= slots_req_;
+  std::vector<uint32_t> out;
+  auto ssm = Sqlite_statement_manager(conn_, recover_proc_allocation_stmt);
+  while (auto tmp = ssm.step<uint32_t>(jobid)) {
+    out.push_back(tmp.value());
+  }
+  return out;
 }
 
 std::vector<pid_t> Status_Manager::get_running_job_pids(pid_t excl) {
