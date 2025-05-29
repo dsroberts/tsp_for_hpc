@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <format>
 #include <iostream>
+#include <map>
 #include <sstream>
 
 #include "functions.hpp"
@@ -51,8 +52,16 @@ void format_jobs_table(std::vector<tsp::job_stat> jobs) {
   }
 }
 
-void format_jobs_gh_md(std::vector<tsp::job_stat> jobs) {
-  std::cout << "## Case timings\nCase | Time | Success?\n---- | ----: | ----\n";
+void format_jobs_gh_md(std::vector<tsp::job_stat> jobs,
+                       std::map<uint32_t, double> rss) {
+  auto hasmem = !rss.empty();
+  if (hasmem) {
+    std::cout << "## Case timings\nCase | Time | MaxRSS | Success?\n---- | "
+                 "----: | ----: | ----\n";
+  } else {
+    std::cout
+        << "## Case timings\nCase | Time | Success?\n---- | ----: | ----\n";
+  }
   for (auto &info : jobs) {
     if (!info.etime) {
       continue;
@@ -83,7 +92,15 @@ void format_jobs_gh_md(std::vector<tsp::job_stat> jobs) {
     }
     std::cout << info.cmd << " | "
               << format_hh_mm_ss(info.etime.value() - info.stime.value())
-              << " | " << (info.status == 0 ? "Yes\n" : "No\n");
+              << " | ";
+    if (hasmem) {
+      if (rss.contains(info.id)) {
+        std::cout << rss[info.id] << "GB";
+      }
+      std::cout << " | ";
+    }
+
+    std::cout << (info.status == 0 ? "Yes\n" : "No\n");
   }
 }
 
@@ -147,7 +164,8 @@ void print_jobs_list(Status_Manager sm_ro, ListCategory c) {
   format_jobs_table(sm_ro.get_job_stats_by_category(c));
 }
 void print_github_summary(Status_Manager sm_ro) {
-  format_jobs_gh_md(sm_ro.get_job_stats_by_category(ListCategory::all));
+  format_jobs_gh_md(sm_ro.get_job_stats_by_category(ListCategory::all),
+                    sm_ro.get_max_rss());
 };
 
 void print_time(Status_Manager sm_ro, TimeCategory c, uint32_t jobid) {

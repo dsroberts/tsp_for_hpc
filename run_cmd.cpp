@@ -86,9 +86,7 @@ void Run_cmd::make_rankfile(std::vector<uint32_t> procs, uint32_t nslots) {
   std::ofstream rf_stream(rf_name_);
   if (rf_stream.is_open()) {
     for (uint32_t i = 0; i < nslots; i++) {
-      rf_stream << "rank " + std::to_string(i) +
-                       "=localhost slot=" + std::to_string(procs[i])
-                << std::endl;
+      rf_stream << "rank " << i << "=localhost slot=" << procs[i] << std::endl;
     }
   }
   rf_stream.close();

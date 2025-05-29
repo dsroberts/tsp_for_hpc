@@ -119,6 +119,12 @@ void Sqlite_statement_manager::bind_param<sql_param_out>(
 
 template <>
 void Sqlite_statement_manager::bind_param<sql_param_out>(int param_idx,
+                                                         double &val) {
+  val = sqlite3_column_double(stmt_, param_idx);
+}
+
+template <>
+void Sqlite_statement_manager::bind_param<sql_param_out>(int param_idx,
                                                          std::string &val) {
   val = reinterpret_cast<const char *>(sqlite3_column_text(stmt_, param_idx));
 }

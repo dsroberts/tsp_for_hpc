@@ -26,7 +26,7 @@ public:
     if (sqlite_ret_ != SQLITE_ROW) {
       if constexpr (sizeof...(InParams) > 0) {
         auto tup = std::make_tuple(InParams...);
-        bind_params<sql_param_in, 0, sizeof...(InParams)>(tup);
+        bind_params<sql_param_in, 0>(tup);
       }
     }
     sqlite_ret_ = sqlite3_step(stmt_);
@@ -44,14 +44,14 @@ public:
     } else if constexpr (sizeof...(Oargs) == 1) {
       std::optional<Oargs...> out;
       if (sqlite_ret_ == SQLITE_ROW) {
-        bind_params<sql_param_out, 0, sizeof...(Oargs)>(tmp);
+        bind_params<sql_param_out, 0>(tmp);
         out = std::get<0>(tmp);
       }
       return out;
     } else {
       std::optional<std::tuple<Oargs...>> out;
       if (sqlite_ret_ == SQLITE_ROW) {
-        bind_params<sql_param_out, 0, sizeof...(Oargs)>(tmp);
+        bind_params<sql_param_out, 0>(tmp);
         out = tmp;
       }
       return out;
@@ -75,12 +75,12 @@ private:
   sqlite3_stmt *stmt_;
   sqlite3 *conn_;
   template <int I, typename T> void bind_param(int param_idx, T &val);
-  template <int I, size_t J, size_t Size, typename... Targs>
+  template <int I, size_t J, typename... Targs>
   void bind_params(std::tuple<Targs...> &args) {
     // sqlite input parameter indices start at 1
     bind_param<I>(J + I, std::get<J>(args));
-    if constexpr (J < Size - 1) {
-      bind_params<I, J + 1, Size>(args);
+    if constexpr (J < sizeof...(Targs) - 1) {
+      bind_params<I, J + 1>(args);
     }
   }
 };

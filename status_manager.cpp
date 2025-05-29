@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <random>
 #include <sqlite3.h>
 #include <string>
@@ -239,6 +240,20 @@ Status_Manager::get_job_stats_by_category(ListCategory c) {
                       int64_t, std::optional<int64_t>, std::optional<int64_t>,
                       std::optional<int32_t>>()) {
     out.push_back(std::make_from_tuple<job_stat>(tmp_stat.value()));
+  }
+  return out;
+}
+
+std::map<uint32_t, double> Status_Manager::get_max_rss() {
+  if (db_not_openable()) {
+    return {};
+  }
+  std::map<uint32_t, double> out;
+  if (Sqlite_statement_manager(conn_, has_memprof).fetch_one<int32_t>() == 1) {
+    auto ssm = Sqlite_statement_manager(conn_, get_max_rss_stmt);
+    while (auto tmp = ssm.step<uint32_t, double>()) {
+      out[std::get<0>(tmp.value())] = std::get<1>(tmp.value());
+    }
   }
   return out;
 }

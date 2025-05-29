@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <sqlite3.h>
 #include <string>
@@ -67,11 +68,10 @@ constexpr std::string_view db_initialise(
 constexpr std::string_view clean(
     // Ensure foreign keys are respected
     "PRAGMA foreign_keys = ON; "
-    // Remove integer sequence
-    "DELETE FROM integer_sequence; "
     // Remove all jobs
     "DELETE FROM jobs; "
     // Reset sequences
+    "DELETE FROM integer_sequence; "
     "DELETE FROM sqlite_sequence;");
 
 constexpr std::string_view create_integer_sequence_stmt(
@@ -150,6 +150,13 @@ constexpr std::string_view get_job_details_by_id_stmt(
     "FROM job_details WHERE id = ?;");
 
 constexpr std::string_view
+    has_memprof("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND "
+                "name = 'memprof'");
+
+constexpr std::string_view get_max_rss_stmt(
+    "SELECT jobid,MAX(rss) / 1048576.0 FROM memprof GROUP BY jobid;");
+
+constexpr std::string_view
     get_job_stdout_stmt("SELECT stdout FROM job_output WHERE jobid = ?;");
 
 constexpr std::string_view
@@ -218,6 +225,7 @@ public:
   job_stat get_job_by_id(uint32_t id);
   job_details get_job_details_by_id(uint32_t id);
   std::vector<job_stat> get_job_stats_by_category(ListCategory c);
+  std::map<uint32_t, double> get_max_rss();
   std::string get_job_stdout(uint32_t id);
   std::string get_job_stderr(uint32_t id);
   uint32_t get_extern_jobid();
