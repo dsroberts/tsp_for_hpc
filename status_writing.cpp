@@ -95,7 +95,7 @@ void format_jobs_gh_md(std::vector<tsp::job_stat> jobs,
               << " | ";
     if (hasmem) {
       if (rss.contains(info.id)) {
-        std::cout << rss[info.id] << "GB";
+        std::cout << rss[info.id] << " GB";
       }
       std::cout << " | ";
     }
