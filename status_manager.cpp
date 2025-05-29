@@ -73,9 +73,11 @@ void Status_Manager::open_db() {
   }
   char *sqlite_err;
   // Use exec here as db_initialise contains many statements.
-  if ((sqlite_ret = sqlite3_exec(conn_, db_initialise.data(), nullptr, nullptr,
-                                 &sqlite_err)) != SQLITE_OK) {
-    exit_with_sqlite_err(sqlite_err, sqlite_ret, nullptr);
+  if (rw_) {
+    if ((sqlite_ret = sqlite3_exec(conn_, db_initialise.data(), nullptr,
+                                   nullptr, &sqlite_err)) != SQLITE_OK) {
+      exit_with_sqlite_err(sqlite_err, sqlite_ret, nullptr);
+    }
   }
 }
 
