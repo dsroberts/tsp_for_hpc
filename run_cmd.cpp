@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <filesystem>
 #include <fstream>
 #include <ranges>
@@ -78,11 +79,11 @@ char **Run_cmd::get_argv() {
 void Run_cmd::add_rankfile(std::vector<uint32_t> procs, uint32_t nslots) {
   make_rankfile(procs, nslots);
   proc_to_run_.emplace(proc_to_run_.begin() + 1, rf_name_);
-  proc_to_run_.emplace(proc_to_run_.begin() + 1, "-rf");
+  proc_to_run_.emplace(proc_to_run_.begin() + 1, "--rankfile");
 }
 
 void Run_cmd::make_rankfile(std::vector<uint32_t> procs, uint32_t nslots) {
-  rf_name_ = get_tmp() / (std::to_string(getpid()) + "_rankfile.txt");
+  rf_name_ = std::format(".{}_rankfile.txt",getpid());
   std::ofstream rf_stream(rf_name_);
   if (rf_stream.is_open()) {
     for (uint32_t i = 0; i < nslots; i++) {

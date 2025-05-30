@@ -19,7 +19,7 @@ public:
 
 private:
   std::vector<std::string> proc_to_run_;
-  std::filesystem::path rf_name_;
+  std::string rf_name_;
   char **argv_holder_ = nullptr;
   void make_rankfile(std::vector<uint32_t> procs, uint32_t nslots);
   bool check_mpi(const char *exe_name);
