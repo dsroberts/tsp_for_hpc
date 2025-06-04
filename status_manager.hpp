@@ -87,7 +87,7 @@ constexpr std::string_view insert_proc_allocation_stmt(
     "WITH avail_slots AS ( SELECT seq.slot FROM integer_sequence seq LEFT JOIN "
     "slots_in_use si ON seq.slot = si.slot WHERE si.slot IS NULL AND seq.slot "
     "< ?) INSERT INTO used_slots(uuid,slot) SELECT ?,slot FROM avail_slots "
-    "WHERE ( SELECT COUNT(*) FROM avail_slots ) > ? ORDER BY slot ASC LIMIT "
+    "WHERE ( SELECT COUNT(*) FROM avail_slots ) >= ? ORDER BY slot ASC LIMIT "
     "?;");
 
 constexpr std::string_view recover_proc_allocation_stmt(
