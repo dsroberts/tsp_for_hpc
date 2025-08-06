@@ -51,18 +51,32 @@ void parse_smaps(pid_t pid, mem_data &data) {
   return;
 }
 
-std::pair<pid_t,uint64_t> get_ppid_and_vmem(std::string stat_line) {
+std::pair<pid_t, uint64_t> get_ppid_and_vmem(std::string stat_line) {
   // ppid is the 4th entry in the stat file
-  std::pair<pid_t,uint64_t> out;
+  std::pair<pid_t, uint64_t> out;
   std::string seg;
   std::stringstream ss(stat_line);
   for (int i = 0; i <= STAT_VSZ_FIELD; ++i) {
     std::getline(ss, seg, ' ');
-    if ( i==STAT_PPID_FIELD ) {
-      out.first = static_cast<pid_t>(std::stol(seg));
+    if (i == STAT_PPID_FIELD) {
+      try {
+        out.first = static_cast<pid_t>(std::stol(seg));
+      } catch (const std::exception &e) {
+        std::cerr << e.what() << '\n'
+                  << "Error reading ppid" << seg << " from " << stat_line
+                  << " from /proc/<pid>/stat" << std::endl;
+        return {-1, 0};
+      }
     }
   }
-  out.second = std::stoull(seg);
+  try {
+    out.second = std::stoull(seg);
+  } catch (const std::exception &e) {
+    std::cerr << e.what() << '\n'
+              << "Error reading vmem" << seg << " from " << stat_line
+              << " from /proc/<pid>/stat" << std::endl;
+    return {-1, 0};
+  }
   return out;
 }
 
@@ -93,7 +107,9 @@ pid_map_t get_pid_map() {
         if (stat_file.is_open()) {
           std::getline(stat_file, line);
           auto ppid = get_ppid_and_vmem(line);
-          out[ppid.first].push_back({pid,ppid.second});
+          if (ppid.first != -1) {
+            out[ppid.first].push_back({pid, ppid.second});
+          }
         }
       }
     }
