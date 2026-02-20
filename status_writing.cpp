@@ -56,11 +56,11 @@ void format_jobs_gh_md(std::vector<tsp::job_stat> jobs,
                        std::map<uint32_t, double> rss) {
   auto hasmem = !rss.empty();
   if (hasmem) {
-    std::cout << "## Case timings\nCase | Time | MaxRSS | Success?\n---- | "
-                 "----: | ----: | ----\n";
+    std::cout << "## Case timings\nSubtask | Command | Time | MaxRSS | "
+                 "Success?\n---- | ---- | ----: | ----: | ----\n";
   } else {
-    std::cout
-        << "## Case timings\nCase | Time | Success?\n---- | ----: | ----\n";
+    std::cout << "## Case timings\nSubtask | Command | Time | Success?\n---- | "
+                 "---- | ----: | ----\n";
   }
   for (auto &info : jobs) {
     if (!info.etime) {
@@ -79,9 +79,6 @@ void format_jobs_gh_md(std::vector<tsp::job_stat> jobs,
         save = true;
       }
     }
-    if (info.category) {
-      cmd = std::format("{}: {}", info.category.value(), cmd);
-    }
     info.cmd = cmd;
   }
   std::sort(jobs.begin(), jobs.end(),
@@ -90,7 +87,8 @@ void format_jobs_gh_md(std::vector<tsp::job_stat> jobs,
     if (!info.etime) {
       continue;
     }
-    std::cout << info.cmd << " | "
+    auto cat = info.category ? info.category.value() : "None";
+    std::cout << cat << " | " << info.cmd << " | "
               << format_hh_mm_ss(info.etime.value() - info.stime.value())
               << " | ";
     if (hasmem) {
