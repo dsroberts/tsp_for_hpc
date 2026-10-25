@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 set(HWLOC_MIN_VERSION 2.5.0)
 set(SQLITE_MIN_VERSION 3.14.0)
 
